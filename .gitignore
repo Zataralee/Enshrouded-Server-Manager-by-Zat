@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local manager/runtime state
+enshrouded_manager/data/
+data/
+*.log
+*.tmp
+*.bak
+
+# Built packages and release output
+dist/
+*.zip
+*.7z
+*.rar
+*.exe
+
+# Enshrouded/SteamCMD installs and server data
+Servers/
+Steamcmd/
+SteamCMD/
+Enshrouded Dedicated Server/
+Darks Logs/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

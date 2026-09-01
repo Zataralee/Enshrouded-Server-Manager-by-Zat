@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Enshrouded Server Manager</title>
+    <link rel="stylesheet" href="/styles.css?v=20260819-subtabs">
+</head>
+<body>
+  <div id="login" class="login hidden">
+    <form id="loginForm" class="panel login-panel">
+      <h1>Enshrouded Manager</h1>
+      <label>Username <input name="username" autocomplete="username" value="admin"></label>
+      <label>Password <input name="password" type="password" autocomplete="current-password"></label>
+      <button type="submit">Sign in</button>
+      <p id="loginError" class="error"></p>
+    </form>
+    <form id="inviteRedeemForm" class="panel login-panel">
+      <h2>Create Account With Invite</h2>
+      <label>Invite code <input name="code" autocomplete="one-time-code"></label>
+      <label>Username <input name="username" autocomplete="username"></label>
+      <label>Password <input name="password" type="password" autocomplete="new-password"></label>
+      <label>Steam name <input name="steam_name"></label>
+      <label>Steam email <input name="steam_email" type="email"></label>
+      <button type="submit">Create Account</button>
+      <p id="inviteError" class="error"></p>
+    </form>
+  </div>
+
+  <main id="app" class="hidden">
+    <header>
+      <div>
+        <h1>Enshrouded Server Manager</h1>
+        <p id="address"></p>
+      </div>
+      <div class="status">
+        <select id="instanceSelect"></select>
+        <span id="stateDot"></span>
+        <strong id="stateText">Loading</strong>
+        <span id="currentUserLabel" class="user-label"></span>
+        <button data-action="logout">Logout</button>
+      </div>
+    </header>
+
+    <nav id="mainNav">
+      <button class="active" data-tab="dashboard">Dashboard</button>
+      <button data-nav-section="server" data-default-tab="setup">Server Setup & Config</button>
+      <button data-tab="logs" data-permission="logs">Logs</button>
+      <button data-nav-section="account" data-default-tab="profile">Account</button>
+      <button data-tab="instructions">Instructions</button>
+      <button data-tab="updates">Updates</button>
+      <button data-tab="manager" data-admin-only="true">Manager</button>
+    </nav>
+    <div id="subNav" class="sub-nav">
+      <div class="sub-nav-group hidden" data-subnav="server">
+        <button data-tab="setup" data-parent-section="server" data-permission="setup">Setup & Instances</button>
+        <button data-tab="settings" data-parent-section="server" data-permission="settings">Server Config</button>
+        <button data-tab="accounts" data-parent-section="server" data-permission="accounts">Game Server Accounts</button>
+        <button data-tab="saves" data-parent-section="server" data-permission="saves">Saves & Backups</button>
+      </div>
+      <div class="sub-nav-group hidden" data-subnav="account">
+        <button data-tab="profile" data-parent-section="account">My Account</button>
+        <button data-tab="invites" data-parent-section="account" data-invites-only="true">Invites</button>
+        <button data-tab="users" data-parent-section="account" data-users-only="true">Users</button>
+      </div>
+    </div>
+
+    <section id="dashboard" class="tab active">
+      <div class="grid two">
+        <div class="panel">
+          <h2>Server Control</h2>
+          <div class="actions">
+            <button data-action="start" data-permission="control">Start</button>
+            <button data-action="stop" data-permission="control">Stop</button>
+            <button data-action="restart" data-permission="control">Restart</button>
+            <button data-action="update" data-permission="control">Update Check</button>
+          </div>
+          <label class="check" data-permission="control"><input id="updateAction" type="checkbox"> Always run update check before start/restart</label>
+          <dl id="serverFacts"></dl>
+        </div>
+        <div class="panel">
+          <h2>Scheduled Restarts</h2>
+          <div class="inline" data-permission="control">
+            <input id="scheduleTime" type="time">
+            <button data-action="addSchedule">Add</button>
+          </div>
+          <div id="scheduleList" class="chips"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="setup" class="tab">
+      <div id="firstRun" class="panel hidden">
+        <h2>Choose a Server Install</h2>
+        <p>No Enshrouded dedicated server instance is configured yet.</p>
+      </div>
+      <div class="grid two">
+        <form id="existingInstallForm" class="panel form-grid">
+          <h2>Use Existing Install</h2>
+          <label>Instance name <input name="name" placeholder="Main Server"></label>
+          <label>Install folder <input name="path" placeholder="C:\Enshrouded Server Manager Environment\Enshrouded Dedicated Server" required></label>
+          <button type="submit">Add Existing Server</button>
+        </form>
+        <form id="newInstallForm" class="panel form-grid">
+          <h2>Install New Server</h2>
+          <label>Instance name <input name="name" placeholder="Pathfinders Public" required></label>
+          <label>Directory <input name="folder_name" placeholder="Pathfinders Public"></label>
+          <label class="wide-field">Query port
+            <div class="port-entry">
+              <input name="queryPort" type="number" min="1" max="65535" placeholder="">
+              <span>Default Port - 15637</span>
+            </div>
+            <small id="queryPortNote" class="field-note"></small>
+          </label>
+          <button type="submit">Download SteamCMD & Install Server</button>
+        </form>
+      </div>
+      <div id="installStatus" class="panel install-status hidden">
+        <h2>Install Status</h2>
+        <div class="progress-line">
+          <span class="spinner"></span>
+          <strong id="installStatusText">Starting</strong>
+        </div>
+        <p id="installStatusDetail"></p>
+        <div id="installJobList" class="job-list"></div>
+      </div>
+      <div class="panel">
+        <h2>Instances</h2>
+        <div id="instanceList" class="instance-list"></div>
+      </div>
+      <div class="panel">
+        <h2>Removed Servers</h2>
+        <div class="actions"><button data-action="clearRemoved" data-admin-only="true">Clear Removed Server List</button></div>
+        <div id="removedInstanceList" class="instance-list"></div>
+      </div>
+    </section>
+
+    <section id="settings" class="tab">
+      <form id="serverForm" class="panel form-grid"></form>
+      <div class="panel">
+        <h2>Raw JSON</h2>
+        <textarea id="rawConfig" spellcheck="false"></textarea>
+        <div class="actions"><button data-action="saveRawConfig">Save JSON</button></div>
+      </div>
+    </section>
+
+    <section id="accounts" class="tab">
+      <div class="grid two">
+        <div class="panel">
+          <h2>Game Server Accounts</h2>
+          <p class="form-note">Enshrouded uses user groups for in-game access. Each group can have its own password and permissions. A blank group password lets players join that group without entering a group password.</p>
+          <div id="groups"></div>
+          <button data-action="addGroup">Add Group</button>
+          <button data-action="saveAccounts">Save Game Server Accounts</button>
+        </div>
+        <div class="panel">
+          <h2>Bans</h2>
+          <div id="bans"></div>
+          <button data-action="addBan">Add Ban</button>
+          <button data-action="saveAccounts">Save Bans</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="logs" class="tab">
+      <div class="grid logs-grid">
+        <div class="panel">
+          <h2>Log Files</h2>
+          <div id="logList" class="list"></div>
+        </div>
+        <div class="panel">
+          <h2 id="logTitle">Log Output</h2>
+          <pre id="logOutput"></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="saves" class="tab">
+      <div class="grid two">
+        <div class="panel">
+          <h2>Import Save Game</h2>
+          <p class="form-note">Use this after your dedicated server is installed. The manager backs up the current server save, then replaces it with the save you select.</p>
+          <div class="save-help">
+            <strong>Where to look on your PC</strong>
+            <p>Steam Cloud saves are usually in <code>C:\Program Files (x86)\Steam\userdata\YOUR_STEAM_ID\1203620\remote</code>.</p>
+            <p>Local saves with Steam Cloud disabled are usually in <code>%USERPROFILE%\Saved Games\enshrouded</code>.</p>
+            <p>If Steam is installed somewhere else, open your Steam folder, then browse to <code>userdata\YOUR_STEAM_ID\1203620\remote</code>.</p>
+          </div>
+          <form id="folderImportForm">
+            <h3>Choose Save Folder From This PC</h3>
+            <p class="form-note">Select the folder that contains your Enshrouded local saves. The manager will find the separate worlds inside it before anything is imported.</p>
+            <input name="savefiles" type="file" webkitdirectory directory multiple required>
+            <div id="uploadedWorldList" class="list"></div>
+            <button type="submit" class="hidden">Import Selected World</button>
+          </form>
+          <div class="actions">
+            <button data-action="discoverSaves">Advanced: Find Saves On Manager Machine</button>
+          </div>
+          <p class="form-note">This advanced option only searches the machine running this manager. Most remote users should use Choose Save Folder From This PC.</p>
+          <div id="localSaveList" class="list"></div>
+          <form id="importForm">
+            <h3>Fallback: Upload Save ZIP</h3>
+            <input name="savegame" type="file" accept=".zip" required>
+            <button type="submit">Upload Save ZIP</button>
+          </form>
+          <h3>Imported Saves</h3>
+          <div id="saveImportHistory" class="list"></div>
+        </div>
+        <div class="panel">
+          <h2>Backups</h2>
+          <div class="actions">
+            <button data-action="backup" data-permission="backups">Create Local Backup</button>
+            <button data-action="backupFtp" data-permission="backups">Backup to FTP</button>
+          </div>
+          <form id="backupScheduleForm" class="form-grid compact">
+            <label class="check"><input name="scheduled_backup_enabled" type="checkbox"> Auto backup this server</label>
+            <label>Interval minutes <input name="backup_interval_minutes" type="number" min="1"></label>
+            <button type="submit">Save Backup Schedule</button>
+          </form>
+          <div id="backupList" class="list"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="profile" class="tab">
+      <form id="passwordForm" class="panel form-grid">
+        <h2>My Password</h2>
+        <label>Current Password <input name="old_password" type="password"></label>
+        <label>New Password <input name="new_password" type="password"></label>
+        <button type="submit">Change My Password</button>
+      </form>
+    </section>
+
+    <section id="invites" class="tab">
+      <div class="grid two">
+        <form id="inviteForm" class="panel form-grid">
+          <h2>Generate Invite Code</h2>
+          <label>Code type
+            <select name="code_type">
+              <option value="basic_user">Basic User</option>
+              <option value="server_manager">Server Manager</option>
+              <option value="server_owner">Server Owner</option>
+            </select>
+          </label>
+          <label>Title <input name="title" placeholder="Optional"></label>
+          <label class="wide-field">Description <textarea name="description" class="short-textarea" maxlength="240" placeholder="Optional short note"></textarea></label>
+          <div class="duration-row wide-field">
+            <label>Expires in <input name="duration" placeholder="DD / HH / MM"></label>
+            <label class="check"><input name="never_expires" type="checkbox"> Does not expire</label>
+            <small class="field-note wide-field">Format is days / hours / minutes. Example: 01 / 00 / 00 means 1 day; 00 / 02 / 30 means 2 hours and 30 minutes.</small>
+          </div>
+          <div id="inviteServerChoices" class="perm-grid"></div>
+          <div id="latestInvite" class="invite-result hidden"></div>
+          <button type="submit">Generate Code</button>
+        </form>
+        <form id="inviteProfilesForm" class="panel form-grid" data-admin-only="true">
+          <h2>Invite Type Permissions</h2>
+          <div id="inviteProfiles"></div>
+          <button type="submit">Save Invite Permissions</button>
+        </form>
+      </div>
+      <div class="grid three">
+        <div class="panel">
+          <h2>Generated Codes</h2>
+          <div id="generatedInviteList" class="list"></div>
+        </div>
+        <div class="panel">
+          <div class="inline wide">
+            <h2>Used Codes</h2>
+            <button data-clear-used-invites="all">Clear all</button>
+          </div>
+          <div id="usedInviteList" class="list"></div>
+        </div>
+        <div class="panel">
+          <div class="inline wide">
+            <h2>Expired Codes</h2>
+            <button data-clear-expired-invites="all">Clear all</button>
+          </div>
+          <div id="expiredInviteList" class="list"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="users" class="tab">
+      <div class="panel" data-admin-only="true">
+        <h2>Create User</h2>
+        <form id="newUserForm" class="form-grid compact">
+          <label>Username <input name="username"></label>
+          <label>Initial Password <input name="password" type="password"></label>
+          <label>Role
+            <select name="role">
+              <option value="user">User</option>
+              <option value="server_owner">Server Owner</option>
+              <option value="admin">Admin</option>
+            </select>
+          </label>
+          <label>Steam name <input name="steam_name"></label>
+          <label>Steam email <input name="steam_email" type="email"></label>
+          <button type="submit">Create User</button>
+        </form>
+      </div>
+      <div class="panel">
+        <h2>Users</h2>
+        <div id="userList" class="user-list"></div>
+      </div>
+    </section>
+
+    <section id="instructions" class="tab">
+      <div id="instructionsContent" class="instructions"></div>
+    </section>
+
+    <section id="updates" class="tab">
+      <div class="panel">
+        <h2 id="versionTitle">Manager Updates</h2>
+        <div id="updateLog" class="update-log"></div>
+      </div>
+    </section>
+
+    <section id="manager" class="tab">
+      <form id="managerForm" class="panel form-grid">
+        <h2>Access</h2>
+        <label>Username <input name="username"></label>
+        <label>New Password <input name="password" type="password" placeholder="Leave blank to keep current"></label>
+        <label>Listen address
+          <select name="bind_host">
+            <option value="127.0.0.1">Localhost only</option>
+            <option value="0.0.0.0">All network interfaces</option>
+          </select>
+        </label>
+        <label>Web UI port <input name="port" type="number" min="1" max="65535"></label>
+        <label class="check"><input name="allow_local_bypass" type="checkbox"> No password from localhost</label>
+        <p class="form-note">Changing the listen address or port takes effect after restarting the manager.</p>
+        <h2>Storage</h2>
+        <label>Managed server root <input name="server_root"></label>
+        <label>Backup root <input name="backup_root"></label>
+        <label>Minimum backup interval minutes <input name="min_backup_interval_minutes" type="number" min="1"></label>
+        <label>Maximum backup interval minutes <input name="max_backup_interval_minutes" type="number" min="1"></label>
+        <label>Max servers per server owner <input name="max_servers_per_owner" type="number" min="0"></label>
+        <label>Server creation cooldown minutes <input name="server_create_cooldown_minutes" type="number" min="0"></label>
+        <label class="check"><input name="auto_restart" type="checkbox"> Restart server after crash</label>
+        <label class="check"><input name="start_on_manager_launch" type="checkbox"> Start server when manager launches</label>
+        <label class="check"><input name="update_before_start" type="checkbox"> Update check on scheduled restarts</label>
+        <label>Stop timeout seconds <input name="stop_timeout_seconds" type="number" min="5" max="120"></label>
+        <h2>FTP Backup</h2>
+        <label class="check"><input name="ftp_enabled" type="checkbox"> Enable FTP backup</label>
+        <label>Host <input name="ftp_host"></label>
+        <label>Port <input name="ftp_port" type="number" min="1" max="65535"></label>
+        <label>Username <input name="ftp_username"></label>
+        <label>Password <input name="ftp_password" type="password" placeholder="Leave blank to keep current"></label>
+        <label>Remote directory <input name="ftp_remote_dir"></label>
+        <label class="check"><input name="ftp_passive" type="checkbox"> Passive mode</label>
+        <button type="submit">Save Manager Settings</button>
+      </form>
+    </section>
+
+    <div id="toast"></div>
+  </main>
+  <script src="/app.js?v=20260819-subtabs"></script>
+</body>
+</html>
