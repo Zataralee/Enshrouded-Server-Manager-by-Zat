@@ -22,6 +22,12 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot "static") -Destination (Join-Pat
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "manager.py") -Destination (Join-Path $Stage "enshrouded_manager")
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "README.md") -Destination (Join-Path $Stage "enshrouded_manager")
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "USER_README.md") -Destination (Join-Path $Stage "enshrouded_manager")
+if (Test-Path -LiteralPath (Join-Path $Root "README.md")) {
+    Copy-Item -LiteralPath (Join-Path $Root "README.md") -Destination (Join-Path $Stage "PROJECT_README.md")
+}
+if (Test-Path -LiteralPath (Join-Path $Root "docs")) {
+    Copy-Item -LiteralPath (Join-Path $Root "docs") -Destination $Stage -Recurse
+}
 
 @'
 @echo off

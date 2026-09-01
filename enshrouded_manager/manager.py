@@ -24,8 +24,16 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 
-APP_VERSION = "0.7.6"
+APP_VERSION = "0.7.7"
 UPDATE_LOG = [
+    {
+        "version": "0.7.7",
+        "date": "2026-09-01",
+        "changes": [
+            "Added shareable repository documentation for install, use, features, screenshots, and releases.",
+            "Updated the Python-required release package to include repository docs and screenshots.",
+        ],
+    },
     {
         "version": "0.7.6",
         "date": "2026-08-19",

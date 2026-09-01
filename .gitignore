@@ -19,6 +19,8 @@ dist/
 *.7z
 *.rar
 *.exe
+!release/
+!release/*.zip
 
 # Enshrouded/SteamCMD installs and server data
 Servers/
