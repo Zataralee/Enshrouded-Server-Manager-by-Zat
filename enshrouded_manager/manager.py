@@ -26,8 +26,19 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 
-APP_VERSION = "0.9.0"
+APP_VERSION = "0.9.1"
 UPDATE_LOG = [
+    {
+        "version": "0.9.1",
+        "date": "2026-09-08",
+        "changes": [
+            "Renamed the user-facing product to ESM-Z - Enshrouded Server Manager by Zat.",
+            "Added a repository-specific Linux host support architecture analysis without changing server runtime behavior.",
+            "Added compatibility for both ESM-Z and legacy manager release package names.",
+            "Clarified installed and published manager versions and moved private GitHub credentials into advanced settings.",
+            "Fixed misleading up-to-date messages when local files are newer than the latest published GitHub Release.",
+        ],
+    },
     {
         "version": "0.9.0",
         "date": "2026-09-08",
@@ -178,7 +189,7 @@ APP_ID = "2278520"
 STEAMCMD_URL = "https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip"
 DEFAULT_QUERY_PORT = 15637
 GITHUB_REPO = "Zataralee/Enshrouded-Server-Manager-by-Zat"
-RELEASE_PACKAGE_PREFIX = "EnshroudedServerManager-PythonRequired"
+RELEASE_PACKAGE_PREFIXES = ("ESM-Z-PythonRequired", "EnshroudedServerManager-PythonRequired")
 SAVE_WORLD_RE = re.compile(r"^([0-9a-fA-F]{8,16})(?:$|[-_].*)")
 DEFAULT_SERVER_WORLD_ID = "3ad85aea"
 KNOWN_WORLD_IDS = [
@@ -345,9 +356,24 @@ def default_manager_updates():
         "latest_version": "",
         "latest_url": "",
         "update_available": False,
+        "package_available": False,
+        "release_state": "unchecked",
+        "latest_published_at": "",
         "last_error": "",
         "last_installed_at": "",
     }
+
+
+def manager_release_state(latest_version, package_available=False, current_version=APP_VERSION):
+    if not latest_version:
+        return "unchecked"
+    latest = version_parts(latest_version)
+    current = version_parts(current_version)
+    if latest > current:
+        return "available" if package_available else "package_missing"
+    if latest == current:
+        return "current"
+    return "local_newer"
 
 
 def default_instance(name, path):
@@ -1278,10 +1304,7 @@ def public_config(user=None):
     cfg.pop("password_hash", None)
     cfg.pop("password_salt", None)
     cfg.pop("initial_password", None)
-    updates = dict(cfg.get("manager_updates", default_manager_updates()))
-    if updates.get("github_token"):
-        updates["github_token"] = "********"
-    cfg["manager_updates"] = updates
+    cfg["manager_updates"] = public_manager_updates(cfg.get("manager_updates"))
     ftp = dict(cfg.get("ftp_backup", {}))
     if ftp.get("password"):
         ftp["password"] = "********"
@@ -2172,6 +2195,27 @@ def version_parts(version):
     return tuple(parts[:3])
 
 
+def public_manager_updates(source=None):
+    updates = dict(source or default_manager_updates())
+    token_saved = bool(updates.get("github_token"))
+    if token_saved:
+        updates["github_token"] = "********"
+    package_available = bool(updates.get("package_available", False))
+    if updates.get("last_error"):
+        release_state = "error"
+    else:
+        release_state = manager_release_state(updates.get("latest_version", ""), package_available)
+    updates.update({
+        "installed_version": APP_VERSION,
+        "release_state": release_state,
+        "update_available": release_state in {"available", "package_missing"},
+        "package_available": package_available,
+        "token_saved": token_saved,
+        "using_default_public_repository": str(updates.get("repo") or GITHUB_REPO).strip().lower() == GITHUB_REPO.lower(),
+    })
+    return updates
+
+
 def is_newer_version(candidate, current=APP_VERSION):
     return version_parts(candidate) > version_parts(current)
 
@@ -2179,7 +2223,7 @@ def is_newer_version(candidate, current=APP_VERSION):
 def github_headers(token=""):
     headers = {
         "Accept": "application/vnd.github+json",
-        "User-Agent": f"EnshroudedServerManager/{APP_VERSION}",
+        "User-Agent": f"ESM-Z/{APP_VERSION}",
     }
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -2215,10 +2259,12 @@ def github_json(url, token=""):
 
 
 def find_release_asset(release):
-    for asset in release.get("assets", []):
-        name = asset.get("name", "")
-        if name.startswith(RELEASE_PACKAGE_PREFIX) and name.endswith(".zip"):
-            return asset
+    assets = release.get("assets", [])
+    for prefix in RELEASE_PACKAGE_PREFIXES:
+        for asset in assets:
+            name = asset.get("name", "")
+            if name.startswith(prefix) and name.endswith(".zip"):
+                return asset
     return None
 
 
@@ -2246,7 +2292,8 @@ def check_manager_updates(force=False):
         release = github_json(f"https://api.github.com/repos/{repo}/releases/latest", token=token)
         tag = str(release.get("tag_name") or "").lstrip("v")
         asset = find_release_asset(release)
-        update_available = bool(tag and is_newer_version(tag))
+        release_state = manager_release_state(tag, bool(asset))
+        update_available = release_state in {"available", "package_missing"}
         latest_url = asset.get("browser_download_url", "") if asset else release.get("html_url", "")
         with CONFIG_LOCK:
             cfg = config()
@@ -2257,13 +2304,16 @@ def check_manager_updates(force=False):
                 "latest_version": tag,
                 "latest_url": latest_url,
                 "update_available": update_available,
-                "last_error": "" if asset or not update_available else "Latest release has no Python-required zip asset.",
+                "package_available": bool(asset),
+                "release_state": release_state,
+                "latest_published_at": str(release.get("published_at") or ""),
+                "last_error": "",
             })
             save_json(MANAGER_CONFIG, cfg)
         if update_available and not was_available:
             notify_webhook_event(
                 "manager.update.available",
-                message=f"Enshrouded Server Manager v{tag} is available. Current version is v{APP_VERSION}.",
+                message=f"ESM-Z v{tag} is available. Current version is v{APP_VERSION}.",
                 details={"latest_version": tag, "current_version": APP_VERSION, "url": latest_url},
             )
         if update_available and manager_updates_config().get("auto_install") and asset:
@@ -2273,7 +2323,7 @@ def check_manager_updates(force=False):
         with CONFIG_LOCK:
             cfg = config()
             updates = cfg.setdefault("manager_updates", default_manager_updates())
-            updates.update({"last_checked_at": now_iso(), "last_error": str(exc)})
+            updates.update({"last_checked_at": now_iso(), "release_state": "error", "last_error": str(exc)})
             save_json(MANAGER_CONFIG, cfg)
             return dict(updates)
 
@@ -2365,7 +2415,7 @@ def post_webhook(webhook, payload):
     mode = webhook.get("mode", "discord")
     if mode == "discord":
         body = {
-            "username": "Enshrouded Server Manager",
+            "username": "ESM-Z",
             "content": payload.get("message") or payload.get("event_label") or payload.get("event"),
         }
         if payload.get("server_name") or payload.get("details"):
@@ -2379,7 +2429,7 @@ def post_webhook(webhook, payload):
     else:
         body = payload
     data = json.dumps(body).encode("utf-8")
-    req = urllib.request.Request(webhook["url"], data=data, headers={"Content-Type": "application/json", "User-Agent": f"EnshroudedServerManager/{APP_VERSION}"}, method="POST")
+    req = urllib.request.Request(webhook["url"], data=data, headers={"Content-Type": "application/json", "User-Agent": f"ESM-Z/{APP_VERSION}"}, method="POST")
     with urllib.request.urlopen(req, timeout=10) as response:
         return response.status
 
@@ -2425,7 +2475,7 @@ def test_webhook(instance_id, webhook_id):
         "timestamp": now_iso(),
         "server_id": inst.get("id", ""),
         "server_name": inst.get("name", ""),
-        "message": f"Test webhook from Enshrouded Server Manager for {inst['name']}.",
+        "message": f"Test webhook from ESM-Z for {inst['name']}.",
         "details": {"test": True},
         "manager_version": APP_VERSION,
     }
@@ -3346,11 +3396,11 @@ class Handler(SimpleHTTPRequestHandler):
             if route == "/api/manager/check-update":
                 if not self.require_admin():
                     return
-                return self.send_json({"ok": True, "manager_updates": check_manager_updates(force=True)})
+                return self.send_json({"ok": True, "manager_updates": public_manager_updates(check_manager_updates(force=True))})
             if route == "/api/manager/install-update":
                 if not self.require_admin():
                     return
-                return self.send_json({"ok": True, "manager_updates": install_manager_update()})
+                return self.send_json({"ok": True, "manager_updates": public_manager_updates(install_manager_update())})
             if route == "/api/webhooks/test":
                 if not self.require_perm("settings"):
                     return
@@ -3490,7 +3540,7 @@ def main():
     threading.Thread(target=monitor_loop, daemon=True).start()
     host = cfg.get("bind_host", "0.0.0.0")
     port = int(cfg.get("port", 8080))
-    write_log(f"Manager UI listening on http://{host}:{port}")
+    write_log(f"ESM-Z UI listening on http://{host}:{port}")
     ThreadingHTTPServer((host, port), Handler).serve_forever()
 
 

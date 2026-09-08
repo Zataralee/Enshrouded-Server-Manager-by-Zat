@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Enshrouded Server Manager</title>
-    <link rel="stylesheet" href="/styles.css?v=20260819-subtabs">
+  <title>ESM-Z</title>
+    <link rel="stylesheet" href="/styles.css?v=20260908-update-status">
 </head>
 <body>
   <div id="login" class="login hidden">
     <form id="loginForm" class="panel login-panel">
-      <h1>Enshrouded Manager</h1>
+      <h1>ESM-Z</h1>
       <label>Username <input name="username" autocomplete="username" value="admin"></label>
       <label>Password <input name="password" type="password" autocomplete="current-password"></label>
       <button type="submit">Sign in</button>
@@ -30,7 +30,7 @@
   <main id="app" class="hidden">
     <header>
       <div>
-        <h1>Enshrouded Server Manager</h1>
+        <h1>ESM-Z</h1>
         <p id="address"></p>
       </div>
       <div class="status">
@@ -99,7 +99,7 @@
         <form id="existingInstallForm" class="panel form-grid">
           <h2>Use Existing Install</h2>
           <label>Instance name <input name="name" placeholder="Main Server"></label>
-          <label>Install folder <input name="path" placeholder="C:\Enshrouded Server Manager Environment\Enshrouded Dedicated Server" required></label>
+          <label>Install folder <input name="path" placeholder="C:\Servers\My Enshrouded Server" required></label>
           <button type="submit">Add Existing Server</button>
         </form>
         <form id="newInstallForm" class="panel form-grid">
@@ -339,7 +339,7 @@
 
     <section id="updates" class="tab">
       <div class="panel">
-        <h2 id="versionTitle">Manager Updates</h2>
+        <h2 id="versionTitle">ESM-Z Updates</h2>
         <div id="updateLog" class="update-log"></div>
       </div>
     </section>
@@ -365,21 +365,32 @@
         <label>Maximum backup interval minutes <input name="max_backup_interval_minutes" type="number" min="1"></label>
         <label>Max servers per server owner <input name="max_servers_per_owner" type="number" min="0"></label>
         <label>Server creation cooldown minutes <input name="server_create_cooldown_minutes" type="number" min="0"></label>
-        <h2>Manager Updates</h2>
-        <label class="check"><input name="manager_updates_enabled" type="checkbox"> Check GitHub for manager updates</label>
-        <label>GitHub repository <input name="manager_updates_repo" placeholder="owner/repo"></label>
+        <h2>ESM-Z Updates</h2>
+        <label class="check"><input name="manager_updates_enabled" type="checkbox"> Check GitHub for ESM-Z updates</label>
         <label>Check interval hours <input name="manager_updates_interval_hours" type="number" min="1"></label>
-        <label>GitHub token <input name="manager_updates_github_token" type="password" placeholder="Required for private repositories; leave blank to keep current"></label>
-        <label class="check"><input name="manager_updates_clear_github_token" type="checkbox"> Clear saved GitHub token</label>
         <label class="check"><input name="manager_updates_auto_install" type="checkbox"> Automatically install available manager update packages</label>
         <div class="wide-field update-check-panel">
           <strong id="managerUpdateStatus">Update status unavailable</strong>
+          <dl class="update-facts">
+            <dt>Installed version</dt><dd id="managerInstalledVersion">Unknown</dd>
+            <dt>Latest published release</dt><dd id="managerPublishedVersion">Not checked</dd>
+            <dt>Last checked</dt><dd id="managerLastChecked">Never</dd>
+          </dl>
           <small id="managerUpdateDetail"></small>
           <div class="actions">
             <button type="button" data-action="checkManagerUpdate">Check Now</button>
-            <button type="button" data-action="installManagerUpdate">Install Available Update</button>
+            <button id="installManagerUpdateButton" type="button" data-action="installManagerUpdate">Install Available Update</button>
           </div>
         </div>
+        <details class="wide-field update-source-settings">
+          <summary>Advanced update source</summary>
+          <p class="form-note">The default ESM-Z repository is public and does not require a token. Change these settings only for a private or custom repository.</p>
+          <div class="form-grid compact">
+            <label>GitHub repository <input name="manager_updates_repo" placeholder="owner/repo"></label>
+            <label>GitHub token <input name="manager_updates_github_token" type="password" placeholder="Only required for a private repository"></label>
+            <label class="check wide-field"><input name="manager_updates_clear_github_token" type="checkbox"> Clear saved GitHub token</label>
+          </div>
+        </details>
         <label class="check"><input name="auto_restart" type="checkbox"> Restart server after crash</label>
         <label class="check"><input name="start_on_manager_launch" type="checkbox"> Start server when manager launches</label>
         <label class="check"><input name="update_before_start" type="checkbox"> Update check on scheduled restarts</label>
@@ -398,6 +409,6 @@
 
     <div id="toast"></div>
   </main>
-  <script src="/app.js?v=20260819-subtabs"></script>
+  <script src="/app.js?v=20260908-update-status"></script>
 </body>
 </html>

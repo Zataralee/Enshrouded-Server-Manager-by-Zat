@@ -1,4 +1,4 @@
-# Enshrouded Manager User Guide
+# ESM-Z User Guide
 
 This guide is for regular manager users. It does not cover admin-only setup, user management, manager ports, or machine-wide storage settings.
 

@@ -284,6 +284,38 @@ dd { margin: 0; }
 .update-check-panel small.error {
   color: var(--danger);
 }
+.update-facts {
+  grid-template-columns: max-content minmax(0, 1fr);
+  margin: 4px 0;
+}
+.update-source-settings {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.update-source-settings summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.update-source-settings[open] summary {
+  margin-bottom: 14px;
+}
+.update-facts {
+  grid-template-columns: max-content minmax(0, 1fr);
+  margin: 4px 0;
+}
+.update-source-settings {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.update-source-settings summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.update-source-settings[open] summary {
+  margin-bottom: 14px;
+}
 .instance-list {
   display: grid;
   gap: 8px;
@@ -447,5 +479,5 @@ pre {
   header { align-items: flex-start; flex-direction: column; }
 .grid.two, .grid.three, .logs-grid, .form-grid, .group, .ban, .instance-row, .duration-row, .port-entry, .save-row { grid-template-columns: 1fr; }
   main > section, header, nav, .sub-nav { padding-left: 14px; padding-right: 14px; }
-  dl { grid-template-columns: 1fr; }
+  dl, .update-facts { grid-template-columns: 1fr; }
 }

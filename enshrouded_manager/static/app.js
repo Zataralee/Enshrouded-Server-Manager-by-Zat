@@ -634,24 +634,45 @@ function renderManagerUpdateStatus() {
   const updates = (state.manager || {}).manager_updates || {};
   const title = document.querySelector("#managerUpdateStatus");
   const detail = document.querySelector("#managerUpdateDetail");
+  const installed = document.querySelector("#managerInstalledVersion");
+  const published = document.querySelector("#managerPublishedVersion");
+  const checked = document.querySelector("#managerLastChecked");
+  const installButton = document.querySelector("#installManagerUpdateButton");
   if (!title || !detail) return;
+  const installedVersion = updates.installed_version || (state.manager || {}).app_version || "";
+  if (installed) installed.textContent = installedVersion ? `v${installedVersion}` : "Unknown";
+  if (published) published.textContent = updates.latest_version ? `v${updates.latest_version}` : "Not checked";
+  if (checked) checked.textContent = updates.last_checked_at || "Never";
+  if (installButton) installButton.disabled = !(updates.release_state === "available" && updates.package_available);
   if (updates.last_error) {
-    title.textContent = "Update check has an error";
+    title.textContent = "Update check failed";
     detail.textContent = updates.last_error;
     detail.classList.add("error");
     return;
   }
   detail.classList.remove("error");
-  if (updates.update_available) {
-    title.textContent = `Manager update available: v${updates.latest_version}`;
-    detail.textContent = updates.latest_url ? `Latest package: ${updates.latest_url}` : "Latest release found, but no package URL was reported.";
-  } else if (updates.last_checked_at) {
-    title.textContent = "Manager is up to date";
-    detail.textContent = `Last checked ${updates.last_checked_at}${updates.latest_version ? `; latest v${updates.latest_version}` : ""}`;
-  } else {
-    title.textContent = "Manager updates have not been checked yet";
-    detail.textContent = "Use Check Now or wait for the scheduled interval.";
+  if (updates.release_state === "available") {
+    title.textContent = `ESM-Z update available: v${updates.latest_version}`;
+    detail.textContent = updates.latest_url ? `Install package: ${updates.latest_url}` : "The release is newer, but no package URL was reported.";
+    return;
   }
+  if (updates.release_state === "package_missing") {
+    title.textContent = `ESM-Z v${updates.latest_version} is published without an install package`;
+    detail.textContent = "The release exists, but it cannot be installed from this page until a Python-required ZIP is attached.";
+    return;
+  }
+  if (updates.release_state === "current") {
+    title.textContent = "Installed version matches the latest published release";
+    detail.textContent = updates.latest_published_at ? `Published ${updates.latest_published_at}` : "No newer published release was found.";
+    return;
+  }
+  if (updates.release_state === "local_newer") {
+    title.textContent = "Installed files are newer than the latest published release";
+    detail.textContent = "This usually means ESM-Z was updated manually or newer Git tags have not yet been published as a GitHub Release.";
+    return;
+  }
+  title.textContent = "ESM-Z updates have not been checked yet";
+  detail.textContent = "Use Check Now or wait for the scheduled interval.";
 }
 
 function renderUsers() {
@@ -852,7 +873,7 @@ function renderInstructions() {
 function renderUpdateLog() {
   const manager = state.manager || {};
   const current = manager.app_version || "";
-  document.querySelector("#versionTitle").textContent = current ? `Manager Updates - Version ${current}` : "Manager Updates";
+  document.querySelector("#versionTitle").textContent = current ? `ESM-Z Updates - Version ${current}` : "ESM-Z Updates";
   const updates = manager.update_log || [];
   document.querySelector("#updateLog").innerHTML = updates.length ? updates.map(item => `
     <div class="update-row">
@@ -1274,7 +1295,14 @@ document.addEventListener("click", async event => {
       const result = await api("/api/manager/check-update", { method: "POST" });
       state.manager.manager_updates = result.manager_updates;
       renderManagerUpdateStatus();
-      toast(result.manager_updates.update_available ? "Manager update available" : "Manager is up to date");
+      const messages = {
+        available: "ESM-Z update available",
+        package_missing: "New release found, but its install package is missing",
+        current: "Installed version matches the latest published release",
+        local_newer: "Installed files are newer than the latest published release",
+        error: "Update check failed",
+      };
+      toast(messages[result.manager_updates.release_state] || "Update check completed");
       return;
     }
     if (action === "installManagerUpdate") {

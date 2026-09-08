@@ -1,6 +1,6 @@
 # Install Guide
 
-This guide is for someone installing Enshrouded Server Manager on their own Windows hardware.
+This guide is for someone installing ESM-Z - Enshrouded Server Manager by Zat - on their own Windows hardware.
 
 ## Requirements
 
@@ -16,13 +16,13 @@ The current shared package does not bundle Python.
 Download the current release package from this repository:
 
 ```text
-release/EnshroudedServerManager-PythonRequired-v0.7.7.zip
+release/ESM-Z-PythonRequired-v0.9.1.zip
 ```
 
 Extract it somewhere permanent, for example:
 
 ```text
-C:\EnshroudedServerManager
+C:\ESM-Z
 ```
 
 Do not extract it inside an existing Enshrouded server install. Keep the manager folder separate from the game server folders it manages.
@@ -32,7 +32,7 @@ Do not extract it inside an existing Enshrouded server install. Keep the manager
 Double-click:
 
 ```text
-Run Enshrouded Server Manager.bat
+Run ESM-Z.bat
 ```
 
 Then open this URL on the server machine:
@@ -91,13 +91,13 @@ New installs can take several minutes. If SteamCMD has to be downloaded for the 
 
 Running game servers are launched as persistent detached processes. Closing or updating the manager should not intentionally stop every running game server.
 
-The Manager tab can check GitHub releases for manager updates. Public repositories do not need a token. If the repository is private, enter a GitHub token with access to read that private repository. Automatic self-update expects the latest GitHub Release to include a Python-required zip package named like `EnshroudedServerManager-PythonRequired-vX.Y.Z.zip`. If a Windows Python install has broken certificate authority data, the manager logs that certificate verification failed and retries the GitHub request so update checks still work.
+The Manager tab checks published GitHub Releases for ESM-Z updates. Git tags and manually copied files are not releases. The status panel shows the installed version, latest published release, and last check separately so a local build newer than the published release is not mislabeled as up to date. The default repository is public and needs no token; custom repository and private-repository credentials are under Advanced update source. Automatic self-update accepts a Python-required zip package named like `ESM-Z-PythonRequired-vX.Y.Z.zip`; the legacy `EnshroudedServerManager-PythonRequired-vX.Y.Z.zip` name remains supported for older installations. If a Windows Python install has broken certificate authority data, ESM-Z logs that certificate verification failed and retries the GitHub request so update checks still work.
 
 To update the manager:
 
 1. Stop the manager window/process.
 2. Replace the manager files with the newer package.
-3. Start `Run Enshrouded Server Manager.bat` again.
+3. Start `Run ESM-Z.bat` again.
 4. Check the Updates tab for the version history.
 
 Game servers should still be visible when the manager comes back up.

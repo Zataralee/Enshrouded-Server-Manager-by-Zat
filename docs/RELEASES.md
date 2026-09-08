@@ -2,22 +2,30 @@
 
 ## Current Release
 
-**v0.9.0** - 2026-09-08
+**v0.9.1** - 2026-09-08
 
 Package:
 
 ```text
-release/EnshroudedServerManager-PythonRequired-v0.9.0.zip
+release/ESM-Z-PythonRequired-v0.9.1.zip
 ```
 
 Changes:
+
+- Renamed the user-facing product to ESM-Z - Enshrouded Server Manager by Zat.
+- Renamed new launchers and release packages to prefer ESM-Z while preserving legacy updater compatibility.
+- Added a repository-specific Linux host support architecture analysis; Linux runtime support is not implemented in this release.
+- Clarified installed versus published update versions and corrected misleading up-to-date results for manually updated files.
+- Moved optional private/custom GitHub credentials into collapsed advanced settings and masked them in manual update API responses.
+
+## Version History
+
+### v0.9.0 - 2026-09-08
 
 - Changed webhooks to a per-server list with support for multiple destinations.
 - Limited Current Webhooks to the server selected in the header.
 - Added independent add, edit, test, enable/disable, and delete controls for each webhook.
 - Existing single-webhook configurations migrate automatically.
-
-## Version History
 
 ### v0.8.2 - 2026-09-08
 

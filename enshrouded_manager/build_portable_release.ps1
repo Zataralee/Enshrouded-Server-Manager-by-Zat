@@ -2,8 +2,8 @@ $ErrorActionPreference = "Stop"
 
 $Root = Split-Path -Parent $PSScriptRoot
 $Out = Join-Path $Root "dist"
-$Stage = Join-Path $Out "EnshroudedServerManager-Portable"
-$Zip = Join-Path $Out "EnshroudedServerManager-Portable.zip"
+$Stage = Join-Path $Out "ESM-Z-Portable"
+$Zip = Join-Path $Out "ESM-Z-Portable.zip"
 $BundledPython = Join-Path $env:USERPROFILE ".cache\codex-runtimes\codex-primary-runtime\dependencies\python"
 
 if (-not (Test-Path (Join-Path $BundledPython "python.exe"))) {
@@ -25,20 +25,21 @@ Copy-Item -LiteralPath $BundledPython -Destination (Join-Path $Stage "python") -
 @'
 @echo off
 cd /d "%~dp0"
-echo Starting Enshrouded Server Manager...
+echo Starting ESM-Z...
 echo.
 "%~dp0python\python.exe" "%~dp0enshrouded_manager\manager.py"
 pause
-'@ | Set-Content -LiteralPath (Join-Path $Stage "Run Enshrouded Server Manager.bat") -Encoding ASCII
+'@ | Set-Content -LiteralPath (Join-Path $Stage "Run ESM-Z.bat") -Encoding ASCII
 
 @'
-Enshrouded Server Manager - Portable Install
+ESM-Z - Enshrouded Server Manager by Zat
+Portable Install
 
 1. Extract this ZIP anywhere on the server, for example:
-   C:\EnshroudedServerManager
+   C:\ESM-Z
 
 2. Double-click:
-   Run Enshrouded Server Manager.bat
+   Run ESM-Z.bat
 
 3. Open this on the server:
    http://127.0.0.1:8080

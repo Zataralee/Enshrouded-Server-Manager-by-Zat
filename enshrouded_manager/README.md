@@ -1,6 +1,8 @@
-# Enshrouded Server Manager
+# ESM-Z
 
-Run `Launch Manager.bat`, then open `http://127.0.0.1:8080` on the server machine.
+ESM-Z - Enshrouded Server Manager by Zat.
+
+Run `Launch ESM-Z.bat`, then open `http://127.0.0.1:8080` on the server machine.
 
 Regular user instructions are in `USER_README.md`. Give that file to non-admin users instead of this admin/setup README.
 

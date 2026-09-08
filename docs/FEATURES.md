@@ -60,11 +60,13 @@
 - Notify server owners/admins when servers start, stop, restart, crash, update, back up, or finish install jobs.
 - Send manager update notifications through configured server webhooks.
 
-## Manager Updates
+## ESM-Z Updates
 
 - Check GitHub releases for newer manager packages.
-- Configure the repository, check interval, and optional GitHub token from the Manager tab.
-- Private repositories require a GitHub token that can read the repository releases.
+- Show the installed version separately from the latest published GitHub Release and last check time.
+- Distinguish an available update, an exact match, a manually installed newer build, and a release missing its install package.
+- Configure the check interval from the Manager tab.
+- Keep custom repository and private-repository token settings in the collapsed Advanced update source section. The default public repository does not require a token.
 - Automatically install available Python-required manager packages when enabled.
 - Restart the manager after a self-update install to run the new version.
 

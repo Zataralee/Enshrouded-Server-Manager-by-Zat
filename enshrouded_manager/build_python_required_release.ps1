@@ -3,12 +3,13 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 $Out = Join-Path $Root "dist"
 $Versions = Join-Path $Out "versions"
-$Stage = Join-Path $Out "EnshroudedServerManager-PythonRequired"
-$Zip = Join-Path $Out "EnshroudedServerManager-PythonRequired.zip"
+$Stage = Join-Path $Out "ESM-Z-PythonRequired"
+$Zip = Join-Path $Out "ESM-Z-PythonRequired.zip"
 $ManagerPy = Join-Path $PSScriptRoot "manager.py"
 $Version = (Select-String -LiteralPath $ManagerPy -Pattern '^APP_VERSION = "([^"]+)"').Matches.Groups[1].Value
 if (-not $Version) { $Version = Get-Date -Format "yyyyMMdd-HHmmss" }
-$VersionZip = Join-Path $Versions "EnshroudedServerManager-PythonRequired-v$Version.zip"
+$VersionZip = Join-Path $Versions "ESM-Z-PythonRequired-v$Version.zip"
+$LegacyVersionZip = Join-Path $Versions "EnshroudedServerManager-PythonRequired-v$Version.zip"
 
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
 New-Item -ItemType Directory -Force -Path $Versions | Out-Null
@@ -32,7 +33,7 @@ if (Test-Path -LiteralPath (Join-Path $Root "docs")) {
 @'
 @echo off
 cd /d "%~dp0"
-echo Starting Enshrouded Server Manager...
+echo Starting ESM-Z...
 echo.
 py -3 "%~dp0enshrouded_manager\manager.py"
 if errorlevel 1 (
@@ -41,18 +42,19 @@ if errorlevel 1 (
   python "%~dp0enshrouded_manager\manager.py"
 )
 pause
-'@ | Set-Content -LiteralPath (Join-Path $Stage "Run Enshrouded Server Manager.bat") -Encoding ASCII
+'@ | Set-Content -LiteralPath (Join-Path $Stage "Run ESM-Z.bat") -Encoding ASCII
 
 @'
-Enshrouded Server Manager - Python Required Install
+ESM-Z - Enshrouded Server Manager by Zat
+Python Required Install
 
 This package is for servers that already have Python 3.11+ installed.
 
 1. Extract this ZIP anywhere on the server, for example:
-   C:\EnshroudedServerManager
+   C:\ESM-Z
 
 2. Double-click:
-   Run Enshrouded Server Manager.bat
+   Run ESM-Z.bat
 
 3. Open this on the server:
    http://127.0.0.1:8080
@@ -80,5 +82,7 @@ enshrouded_manager\data\manager.log
 [System.Reflection.Assembly]::LoadWithPartialName("System.IO.Compression.FileSystem") | Out-Null
 [System.IO.Compression.ZipFile]::CreateFromDirectory($Stage, $Zip)
 [System.IO.File]::Copy($Zip, $VersionZip, $true)
+[System.IO.File]::Copy($Zip, $LegacyVersionZip, $true)
 Write-Host "Created $Zip"
 Write-Host "Version history copy $VersionZip"
+Write-Host "Legacy updater compatibility copy $LegacyVersionZip"

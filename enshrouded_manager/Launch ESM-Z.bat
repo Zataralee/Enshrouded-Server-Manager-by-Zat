@@ -1,5 +1,4 @@
 @echo off
-rem Legacy launcher retained for backward compatibility. New installs use Launch ESM-Z.bat.
 cd /d "%~dp0\.."
 set "CODEX_PY=%USERPROFILE%\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
 if exist "%CODEX_PY%" (
