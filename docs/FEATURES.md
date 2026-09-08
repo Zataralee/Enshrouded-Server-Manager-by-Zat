@@ -51,6 +51,22 @@
 - Schedule automatic backups at server-level intervals.
 - Optionally send backups to an FTP server.
 
+## Webhooks
+
+- Configure a Discord or generic JSON webhook for each server.
+- Choose which events should be sent.
+- Send test webhooks from the UI.
+- Notify server owners/admins when servers start, stop, restart, crash, update, back up, or finish install jobs.
+- Send manager update notifications through configured server webhooks.
+
+## Manager Updates
+
+- Check GitHub releases for newer manager packages.
+- Configure the repository, check interval, and optional GitHub token from the Manager tab.
+- Private repositories require a GitHub token that can read the repository releases.
+- Automatically install available Python-required manager packages when enabled.
+- Restart the manager after a self-update install to run the new version.
+
 ## Logs And Instructions
 
 - View server and manager logs from the UI.

@@ -24,8 +24,17 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 
-APP_VERSION = "0.7.7"
+APP_VERSION = "0.8.0"
 UPDATE_LOG = [
+    {
+        "version": "0.8.0",
+        "date": "2026-09-08",
+        "changes": [
+            "Added per-server Discord/generic webhook notifications under Server Setup & Config.",
+            "Added configurable manager update checks against GitHub releases.",
+            "Added webhook notifications for manager update availability.",
+        ],
+    },
     {
         "version": "0.7.7",
         "date": "2026-09-01",
@@ -141,6 +150,8 @@ MANAGER_LOG = DATA_DIR / "manager.log"
 APP_ID = "2278520"
 STEAMCMD_URL = "https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip"
 DEFAULT_QUERY_PORT = 15637
+GITHUB_REPO = "Zataralee/Enshrouded-Server-Manager"
+RELEASE_PACKAGE_PREFIX = "EnshroudedServerManager-PythonRequired"
 SAVE_WORLD_RE = re.compile(r"^([0-9a-fA-F]{8,16})(?:$|[-_].*)")
 DEFAULT_SERVER_WORLD_ID = "3ad85aea"
 KNOWN_WORLD_IDS = [
@@ -156,6 +167,35 @@ KNOWN_WORLD_IDS = [
     "33d84fe5",
 ]
 ALL_PERMISSIONS = ["setup", "control", "settings", "accounts", "logs", "saves", "backups"]
+WEBHOOK_EVENTS = {
+    "server.started": "Server started",
+    "server.stopped": "Server stopped",
+    "server.restarted": "Server restarted",
+    "server.crashed": "Server crashed",
+    "server.failed": "Server failed to start",
+    "server.updated": "Server update completed",
+    "server.backup.created": "Backup created",
+    "server.backup.ftp": "FTP backup completed",
+    "server.install.started": "Server install started",
+    "server.install.completed": "Server install completed",
+    "server.install.failed": "Server install failed",
+    "manager.update.available": "Manager update available",
+    "manager.update.installed": "Manager update installed",
+    "manager.update.failed": "Manager update failed",
+}
+DEFAULT_WEBHOOK_EVENTS = [
+    "server.started",
+    "server.stopped",
+    "server.restarted",
+    "server.crashed",
+    "server.failed",
+    "server.updated",
+    "server.backup.created",
+    "server.backup.ftp",
+    "server.install.completed",
+    "server.install.failed",
+    "manager.update.available",
+]
 INVITE_TYPES = {
     "basic_user": {"label": "Basic User", "role": "user", "permissions": ["logs", "saves", "backups"]},
     "server_manager": {"label": "Server Manager", "role": "user", "permissions": ["control", "settings", "accounts", "logs", "saves", "backups"]},
@@ -196,6 +236,7 @@ def default_config():
         "max_backup_interval_minutes": 10080,
         "max_servers_per_owner": 0,
         "server_create_cooldown_minutes": 0,
+        "manager_updates": default_manager_updates(),
         "update_before_start": False,
         "scheduled_restarts": [],
         "ftp_backup": {
@@ -237,6 +278,31 @@ def default_ftp_backup():
     }
 
 
+def default_webhook():
+    return {
+        "enabled": False,
+        "mode": "discord",
+        "url": "",
+        "events": list(DEFAULT_WEBHOOK_EVENTS),
+    }
+
+
+def default_manager_updates():
+    return {
+        "enabled": True,
+        "repo": GITHUB_REPO,
+        "interval_hours": 24,
+        "github_token": "",
+        "auto_install": False,
+        "last_checked_at": "",
+        "latest_version": "",
+        "latest_url": "",
+        "update_available": False,
+        "last_error": "",
+        "last_installed_at": "",
+    }
+
+
 def default_instance(name, path):
     instance_id = slugify(name) or secrets.token_hex(4)
     return {
@@ -253,6 +319,7 @@ def default_instance(name, path):
         "last_backup_key": "",
         "scheduled_restarts": [],
         "ftp_backup": default_ftp_backup(),
+        "webhook": default_webhook(),
         "created_at": now_iso(),
         "save_imports": [],
         "pid": 0,
@@ -566,6 +633,7 @@ class ServerSupervisor:
                 last_exit_code=None,
             )
             write_log(f"Started {get_instance(self.instance_id)['name']} pid={self.process.pid}")
+            notify_webhook_event("server.started", self.instance_id, message=f"{get_instance(self.instance_id)['name']} started.")
         time.sleep(2)
         with self.lock:
             if self.process is not None:
@@ -578,6 +646,12 @@ class ServerSupervisor:
                     hint = ""
                     if signed == -1:
                         hint = " This often means the configured query port is already in use or blocked."
+                    notify_webhook_event(
+                        "server.failed",
+                        self.instance_id,
+                        message=f"{get_instance(self.instance_id)['name']} failed to start.",
+                        details={"exit_code": code, "signed_exit_code": signed},
+                    )
                     raise RuntimeError(f"Enshrouded server exited immediately with code {code} ({signed}).{hint}")
 
     def stop(self):
@@ -615,11 +689,13 @@ class ServerSupervisor:
             self.process = None
             self.activity = "idle"
             update_instance_metadata(self.instance_id, pid=0, desired_running=False, last_stopped_at=now_iso(), last_exit_code=proc.returncode)
+            notify_webhook_event("server.stopped", self.instance_id, message=f"{get_instance(self.instance_id)['name']} stopped.")
 
     def restart(self, update_first=False):
         self.stop()
         self.start(update_first=update_first)
         update_instance_metadata(self.instance_id, last_restarted_at=now_iso())
+        notify_webhook_event("server.restarted", self.instance_id, message=f"{get_instance(self.instance_id)['name']} restarted.")
 
     def monitor_once(self):
         inst = get_instance(self.instance_id)
@@ -643,6 +719,12 @@ class ServerSupervisor:
                     update_instance_metadata(self.instance_id, pid=0, last_exit_code=code)
         if crashed:
             write_log(f"Enshrouded server exited with code {self.last_exit_code} ({signed_exit_code(self.last_exit_code)})")
+            notify_webhook_event(
+                "server.crashed",
+                self.instance_id,
+                message=f"{inst['name']} crashed with exit code {self.last_exit_code}.",
+                details={"exit_code": self.last_exit_code, "signed_exit_code": signed_exit_code(self.last_exit_code)},
+            )
             if inst.get("auto_restart", True) and desired_running:
                 write_log("Auto-restart is enabled; starting server again")
                 self.start(update_first=False)
@@ -784,6 +866,15 @@ def migrate_config(cfg):
     if "server_create_cooldown_minutes" not in cfg:
         cfg["server_create_cooldown_minutes"] = 0
         changed = True
+    if "manager_updates" not in cfg:
+        cfg["manager_updates"] = default_manager_updates()
+        changed = True
+    else:
+        defaults = default_manager_updates()
+        for key, value in defaults.items():
+            if key not in cfg["manager_updates"]:
+                cfg["manager_updates"][key] = value
+                changed = True
     if "removed_instances" not in cfg:
         cfg["removed_instances"] = []
         changed = True
@@ -841,6 +932,7 @@ def migrate_config(cfg):
             "last_backup_key": "",
             "scheduled_restarts": cfg.get("scheduled_restarts", []),
             "ftp_backup": cfg.get("ftp_backup", default_ftp_backup()),
+            "webhook": default_webhook(),
             "created_at": now_iso(),
             "save_imports": [],
             "pid": 0,
@@ -1120,6 +1212,10 @@ def public_config(user=None):
     cfg.pop("password_hash", None)
     cfg.pop("password_salt", None)
     cfg.pop("initial_password", None)
+    updates = dict(cfg.get("manager_updates", default_manager_updates()))
+    if updates.get("github_token"):
+        updates["github_token"] = "********"
+    cfg["manager_updates"] = updates
     ftp = dict(cfg.get("ftp_backup", {}))
     if ftp.get("password"):
         ftp["password"] = "********"
@@ -1144,6 +1240,7 @@ def public_config(user=None):
     cfg["used_query_ports"] = sorted({instance_query_port(inst["id"]) for inst in instances()})
     cfg["app_version"] = APP_VERSION
     cfg["update_log"] = UPDATE_LOG
+    cfg["webhook_events"] = WEBHOOK_EVENTS
     if user:
         cfg["current_user"] = user_public(user)
     return cfg
@@ -1211,6 +1308,26 @@ def update_config(patch):
             if incoming.get("password") and incoming.get("password") != "********":
                 ftp["password"] = incoming["password"]
             cfg["ftp_backup"] = ftp
+        if "manager_updates" in patch:
+            updates = dict(cfg.get("manager_updates", default_manager_updates()))
+            incoming = patch["manager_updates"]
+            for key in ["enabled", "repo", "auto_install"]:
+                if key in incoming:
+                    updates[key] = incoming[key]
+            if "interval_hours" in incoming:
+                interval = int(incoming.get("interval_hours") or 24)
+                if interval < 1:
+                    raise ValueError("Manager update interval must be at least 1 hour")
+                updates["interval_hours"] = interval
+            if incoming.get("github_token") and incoming.get("github_token") != "********":
+                updates["github_token"] = incoming["github_token"].strip()
+            if "clear_github_token" in incoming and incoming.get("clear_github_token"):
+                updates["github_token"] = ""
+            repo = str(updates.get("repo") or "").strip()
+            if "/" not in repo:
+                raise ValueError("GitHub repository must use owner/repo format")
+            updates["repo"] = repo
+            cfg["manager_updates"] = updates
         cfg.pop("initial_password", None)
         save_json(MANAGER_CONFIG, cfg)
         write_log("Manager settings updated")
@@ -1351,6 +1468,10 @@ def public_instance(inst):
     if ftp.get("password"):
         ftp["password"] = "********"
     item["ftp_backup"] = ftp
+    webhook = dict(item.get("webhook", default_webhook()))
+    if webhook.get("url"):
+        webhook["url"] = "********"
+    item["webhook"] = webhook
     item["installed"] = (Path(inst["path"]) / "enshrouded_server.exe").exists()
     item["config_exists"] = (Path(inst["path"]) / "enshrouded_server.json").exists()
     item["query_port"] = instance_query_port(inst["id"]) if item["config_exists"] else DEFAULT_QUERY_PORT
@@ -1460,6 +1581,21 @@ def update_instance(instance_id, patch):
             if incoming.get("password") and incoming.get("password") != "********":
                 ftp["password"] = incoming["password"]
             target["ftp_backup"] = ftp
+        if "webhook" in patch:
+            webhook = dict(target.get("webhook", default_webhook()))
+            incoming = patch["webhook"]
+            for key in ["enabled", "mode"]:
+                if key in incoming:
+                    webhook[key] = incoming[key]
+            if "events" in incoming:
+                webhook["events"] = [event for event in incoming.get("events", []) if event in WEBHOOK_EVENTS]
+            if incoming.get("url") and incoming.get("url") != "********":
+                webhook["url"] = incoming["url"].strip()
+            if incoming.get("clear_url"):
+                webhook["url"] = ""
+            if webhook.get("mode") not in {"discord", "json"}:
+                webhook["mode"] = "discord"
+            target["webhook"] = webhook
         save_json(MANAGER_CONFIG, cfg)
     write_log(f"Updated server instance {instance_id}")
     return get_instance(instance_id)
@@ -1896,6 +2032,251 @@ def save_server_config(server_config, instance_id=None, restart_if_running=False
     return {"restarted": False}
 
 
+def version_parts(version):
+    cleaned = str(version or "").strip().lstrip("vV")
+    parts = []
+    for chunk in cleaned.split("."):
+        digits = "".join(ch for ch in chunk if ch.isdigit())
+        parts.append(int(digits or 0))
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts[:3])
+
+
+def is_newer_version(candidate, current=APP_VERSION):
+    return version_parts(candidate) > version_parts(current)
+
+
+def github_headers(token=""):
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": f"EnshroudedServerManager/{APP_VERSION}",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+def github_json(url, token=""):
+    req = urllib.request.Request(url, headers=github_headers(token))
+    with urllib.request.urlopen(req, timeout=20) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def find_release_asset(release):
+    for asset in release.get("assets", []):
+        name = asset.get("name", "")
+        if name.startswith(RELEASE_PACKAGE_PREFIX) and name.endswith(".zip"):
+            return asset
+    return None
+
+
+def manager_updates_config():
+    return config().get("manager_updates", default_manager_updates())
+
+
+def check_manager_updates(force=False):
+    with CONFIG_LOCK:
+        cfg = config()
+        updates = cfg.setdefault("manager_updates", default_manager_updates())
+        if not updates.get("enabled", True) and not force:
+            return dict(updates)
+        interval_hours = max(1, int(updates.get("interval_hours", 24) or 24))
+        if not force and updates.get("last_checked_at"):
+            try:
+                last_checked = dt.datetime.fromisoformat(updates["last_checked_at"])
+                if dt.datetime.now() - last_checked < dt.timedelta(hours=interval_hours):
+                    return dict(updates)
+            except ValueError:
+                pass
+        repo = str(updates.get("repo") or GITHUB_REPO).strip()
+        token = str(updates.get("github_token") or "").strip()
+    try:
+        release = github_json(f"https://api.github.com/repos/{repo}/releases/latest", token=token)
+        tag = str(release.get("tag_name") or "").lstrip("v")
+        asset = find_release_asset(release)
+        update_available = bool(tag and is_newer_version(tag))
+        latest_url = asset.get("browser_download_url", "") if asset else release.get("html_url", "")
+        with CONFIG_LOCK:
+            cfg = config()
+            updates = cfg.setdefault("manager_updates", default_manager_updates())
+            was_available = bool(updates.get("update_available", False))
+            updates.update({
+                "last_checked_at": now_iso(),
+                "latest_version": tag,
+                "latest_url": latest_url,
+                "update_available": update_available,
+                "last_error": "" if asset or not update_available else "Latest release has no Python-required zip asset.",
+            })
+            save_json(MANAGER_CONFIG, cfg)
+        if update_available and not was_available:
+            notify_webhook_event(
+                "manager.update.available",
+                message=f"Enshrouded Server Manager v{tag} is available. Current version is v{APP_VERSION}.",
+                details={"latest_version": tag, "current_version": APP_VERSION, "url": latest_url},
+            )
+        if update_available and manager_updates_config().get("auto_install") and asset:
+            install_manager_update()
+        return dict(manager_updates_config())
+    except Exception as exc:
+        with CONFIG_LOCK:
+            cfg = config()
+            updates = cfg.setdefault("manager_updates", default_manager_updates())
+            updates.update({"last_checked_at": now_iso(), "last_error": str(exc)})
+            save_json(MANAGER_CONFIG, cfg)
+            return dict(updates)
+
+
+def install_manager_update():
+    updates = manager_updates_config()
+    if not updates.get("update_available"):
+        raise RuntimeError("No manager update is currently available")
+    repo = str(updates.get("repo") or GITHUB_REPO).strip()
+    token = str(updates.get("github_token") or "").strip()
+    release = github_json(f"https://api.github.com/repos/{repo}/releases/latest", token=token)
+    asset = find_release_asset(release)
+    if not asset:
+        raise RuntimeError("Latest GitHub release does not include a Python-required zip asset")
+    package_dir = DATA_DIR / "manager_updates"
+    package_dir.mkdir(parents=True, exist_ok=True)
+    target_zip = package_dir / asset["name"]
+    req = urllib.request.Request(asset["browser_download_url"], headers=github_headers(token))
+    try:
+        with urllib.request.urlopen(req, timeout=60) as response, target_zip.open("wb") as fh:
+            shutil.copyfileobj(response, fh)
+        backup_dir = package_dir / f"before-{APP_VERSION}-{dt.datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        if APP_DIR.exists():
+            shutil.copytree(APP_DIR, backup_dir / "enshrouded_manager", ignore=shutil.ignore_patterns("data", "__pycache__"))
+        shutil.rmtree(package_dir / "extract", ignore_errors=True)
+        with zipfile.ZipFile(target_zip, "r") as zf:
+            zf.extractall(package_dir / "extract")
+        extracted_manager = package_dir / "extract" / "enshrouded_manager"
+        if not extracted_manager.exists():
+            raise RuntimeError("Downloaded update package does not contain enshrouded_manager")
+        for item in extracted_manager.iterdir():
+            if item.name in {"data", "__pycache__"}:
+                continue
+            dest = APP_DIR / item.name
+            if dest.exists():
+                if dest.is_dir():
+                    shutil.rmtree(dest)
+                else:
+                    dest.unlink()
+            if item.is_dir():
+                shutil.copytree(item, dest)
+            else:
+                shutil.copy2(item, dest)
+        shutil.rmtree(package_dir / "extract", ignore_errors=True)
+        with CONFIG_LOCK:
+            cfg = config()
+            updates = cfg.setdefault("manager_updates", default_manager_updates())
+            updates["last_installed_at"] = now_iso()
+            updates["last_error"] = ""
+            save_json(MANAGER_CONFIG, cfg)
+        notify_webhook_event(
+            "manager.update.installed",
+            message=f"Manager update package v{str(release.get('tag_name') or '').lstrip('v')} was installed. Restart the manager to run the new version.",
+            details={"latest_version": str(release.get("tag_name") or "").lstrip("v")},
+        )
+        write_log("Manager update package installed; restart the manager to run the new version")
+        return dict(manager_updates_config())
+    except Exception as exc:
+        with CONFIG_LOCK:
+            cfg = config()
+            updates = cfg.setdefault("manager_updates", default_manager_updates())
+            updates["last_error"] = str(exc)
+            save_json(MANAGER_CONFIG, cfg)
+        notify_webhook_event("manager.update.failed", message=f"Manager update failed: {exc}", details={"error": str(exc)})
+        raise
+
+
+def webhook_targets(event, instance_id=None):
+    targets = []
+    if instance_id:
+        candidates = [get_instance(instance_id)]
+    else:
+        candidates = instances()
+    seen = set()
+    for inst in candidates:
+        webhook = inst.get("webhook", {})
+        url = webhook.get("url", "").strip()
+        if not webhook.get("enabled") or not url or event not in webhook.get("events", []):
+            continue
+        key = (url, webhook.get("mode", "discord"))
+        if key in seen:
+            continue
+        seen.add(key)
+        targets.append((inst, dict(webhook)))
+    return targets
+
+
+def post_webhook(webhook, payload):
+    mode = webhook.get("mode", "discord")
+    if mode == "discord":
+        body = {
+            "username": "Enshrouded Server Manager",
+            "content": payload.get("message") or payload.get("event_label") or payload.get("event"),
+        }
+        if payload.get("server_name") or payload.get("details"):
+            fields = []
+            if payload.get("server_name"):
+                fields.append({"name": "Server", "value": payload["server_name"], "inline": True})
+            fields.append({"name": "Event", "value": payload.get("event_label", payload["event"]), "inline": True})
+            if payload.get("details", {}).get("error"):
+                fields.append({"name": "Error", "value": str(payload["details"]["error"])[:1000], "inline": False})
+            body["embeds"] = [{"title": payload.get("event_label", payload["event"]), "fields": fields, "timestamp": payload["timestamp"]}]
+    else:
+        body = payload
+    data = json.dumps(body).encode("utf-8")
+    req = urllib.request.Request(webhook["url"], data=data, headers={"Content-Type": "application/json", "User-Agent": f"EnshroudedServerManager/{APP_VERSION}"}, method="POST")
+    with urllib.request.urlopen(req, timeout=10) as response:
+        return response.status
+
+
+def send_webhook_event(event, instance_id=None, message="", details=None):
+    if event not in WEBHOOK_EVENTS:
+        return []
+    sent = []
+    for inst, webhook in webhook_targets(event, instance_id=instance_id):
+        payload = {
+            "event": event,
+            "event_label": WEBHOOK_EVENTS[event],
+            "timestamp": now_iso(),
+            "server_id": inst.get("id", ""),
+            "server_name": inst.get("name", ""),
+            "message": message or WEBHOOK_EVENTS[event],
+            "details": details or {},
+            "manager_version": APP_VERSION,
+        }
+        try:
+            status = post_webhook(webhook, payload)
+            sent.append({"server_id": inst.get("id", ""), "status": status})
+        except Exception as exc:
+            write_log(f"Webhook delivery failed for {inst.get('name', 'manager')}: {exc}")
+            sent.append({"server_id": inst.get("id", ""), "error": str(exc)})
+    return sent
+
+
+def notify_webhook_event(event, instance_id=None, message="", details=None):
+    threading.Thread(target=send_webhook_event, args=(event, instance_id, message, details or {}), daemon=True).start()
+
+
+def test_webhook(instance_id=None):
+    inst = get_instance(instance_id)
+    result = send_webhook_event(
+        "server.started",
+        instance_id=inst["id"],
+        message=f"Test webhook from Enshrouded Server Manager for {inst['name']}.",
+        details={"test": True},
+    )
+    if not result:
+        raise RuntimeError("No enabled webhook is configured for this server and event")
+    errors = [item.get("error") for item in result if item.get("error")]
+    if errors:
+        raise RuntimeError(errors[0])
+    return result
+
+
 def run_update(instance_id=None, status=None):
     exe = ensure_steamcmd(status=status)
     target_dir = instance_path(instance_id)
@@ -1919,6 +2300,7 @@ def run_update(instance_id=None, status=None):
     )
     write_log("SteamCMD update check completed")
     update_instance_metadata(get_instance(instance_id)["id"], last_updated_at=now_iso())
+    notify_webhook_event("server.updated", get_instance(instance_id)["id"], message=f"Update check completed for {get_instance(instance_id)['name']}.")
     if status:
         status("SteamCMD install/update completed")
 
@@ -1971,6 +2353,11 @@ def start_install_job(body, user):
         folder_name=body.get("folder_name") or "",
         query_port=query_port,
     )
+    notify_webhook_event(
+        "server.install.started",
+        message=f"Server install started for {body.get('name') or body.get('folder_name') or 'Enshrouded Server'}.",
+        details={"job_id": job_id, "query_port": query_port},
+    )
 
     def runner():
         try:
@@ -1992,9 +2379,20 @@ def start_install_job(body, user):
                 message="Server installed and ready for configuration",
                 result={"instance": public_instance(inst)},
             )
+            notify_webhook_event(
+                "server.install.completed",
+                inst["id"],
+                message=f"{inst['name']} installed and is ready for configuration.",
+                details={"job_id": job_id, "query_port": query_port},
+            )
         except Exception as exc:
             update_job(job_id, status="failed", message="Install failed", error=str(exc))
             write_log(f"Install job {job_id} failed: {exc}")
+            notify_webhook_event(
+                "server.install.failed",
+                message=f"Server install failed: {exc}",
+                details={"job_id": job_id, "error": str(exc), "instance_name": body.get("name") or body.get("folder_name") or ""},
+            )
 
     threading.Thread(target=runner, daemon=True).start()
     return job_id
@@ -2077,8 +2475,10 @@ def create_backup(push_ftp=False, instance_id=None):
                 if path.is_file():
                     zf.write(path, Path("savegame") / path.relative_to(save_dir))
     write_log(f"Created local backup {archive.name}")
+    notify_webhook_event("server.backup.created", inst["id"], message=f"Backup created for {inst['name']}: {archive.name}", details={"backup": archive.name})
     if push_ftp:
         push_backup_to_ftp(archive, inst["id"])
+        notify_webhook_event("server.backup.ftp", inst["id"], message=f"FTP backup completed for {inst['name']}: {archive.name}", details={"backup": archive.name})
     return archive
 
 
@@ -2798,6 +3198,20 @@ class Handler(SimpleHTTPRequestHandler):
                 if not self.require_admin():
                     return
                 return self.send_json({"ok": True, "manager": update_config(self.json_body())})
+            if route == "/api/manager/check-update":
+                if not self.require_admin():
+                    return
+                return self.send_json({"ok": True, "manager_updates": check_manager_updates(force=True)})
+            if route == "/api/manager/install-update":
+                if not self.require_admin():
+                    return
+                return self.send_json({"ok": True, "manager_updates": install_manager_update()})
+            if route == "/api/webhooks/test":
+                if not self.require_perm("settings"):
+                    return
+                body = self.json_body()
+                inst = get_instance_for_user(self.current_user(), body.get("instance_id"))
+                return self.send_json({"ok": True, "result": test_webhook(inst["id"])})
             if route == "/api/users/create":
                 if not self.require_admin():
                     return
@@ -2883,6 +3297,7 @@ class Handler(SimpleHTTPRequestHandler):
 def monitor_loop():
     while True:
         try:
+            check_manager_updates(force=False)
             for inst in instances():
                 supervisor(inst["id"]).monitor_once()
                 scheduled_restart_check(inst["id"])

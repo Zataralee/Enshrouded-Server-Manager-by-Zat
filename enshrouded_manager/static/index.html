@@ -57,6 +57,7 @@
         <button data-tab="settings" data-parent-section="server" data-permission="settings">Server Config</button>
         <button data-tab="accounts" data-parent-section="server" data-permission="accounts">Game Server Accounts</button>
         <button data-tab="saves" data-parent-section="server" data-permission="saves">Saves & Backups</button>
+        <button data-tab="webhooks" data-parent-section="server" data-permission="settings">Webhooks</button>
       </div>
       <div class="sub-nav-group hidden" data-subnav="account">
         <button data-tab="profile" data-parent-section="account">My Account</button>
@@ -222,6 +223,27 @@
       </div>
     </section>
 
+    <section id="webhooks" class="tab">
+      <form id="webhookForm" class="panel form-grid">
+        <h2>Server Webhook</h2>
+        <p class="form-note">Send selected server and manager update events to Discord or another webhook receiver. Webhook URLs are stored like secrets and hidden after saving.</p>
+        <label class="check"><input name="enabled" type="checkbox"> Enable webhook for this server</label>
+        <label>Mode
+          <select name="mode">
+            <option value="discord">Discord</option>
+            <option value="json">Generic JSON</option>
+          </select>
+        </label>
+        <label class="wide-field">Webhook URL <input name="url" type="password" placeholder="Leave blank to keep current URL"></label>
+        <label class="check"><input name="clear_url" type="checkbox"> Clear saved webhook URL</label>
+        <div id="webhookEvents" class="perm-grid"></div>
+        <div class="actions wide-field">
+          <button type="submit">Save Webhook</button>
+          <button type="button" data-action="testWebhook">Send Test Webhook</button>
+        </div>
+      </form>
+    </section>
+
     <section id="profile" class="tab">
       <form id="passwordForm" class="panel form-grid">
         <h2>My Password</h2>
@@ -337,6 +359,21 @@
         <label>Maximum backup interval minutes <input name="max_backup_interval_minutes" type="number" min="1"></label>
         <label>Max servers per server owner <input name="max_servers_per_owner" type="number" min="0"></label>
         <label>Server creation cooldown minutes <input name="server_create_cooldown_minutes" type="number" min="0"></label>
+        <h2>Manager Updates</h2>
+        <label class="check"><input name="manager_updates_enabled" type="checkbox"> Check GitHub for manager updates</label>
+        <label>GitHub repository <input name="manager_updates_repo" placeholder="owner/repo"></label>
+        <label>Check interval hours <input name="manager_updates_interval_hours" type="number" min="1"></label>
+        <label>GitHub token <input name="manager_updates_github_token" type="password" placeholder="Required for private repositories; leave blank to keep current"></label>
+        <label class="check"><input name="manager_updates_clear_github_token" type="checkbox"> Clear saved GitHub token</label>
+        <label class="check"><input name="manager_updates_auto_install" type="checkbox"> Automatically install available manager update packages</label>
+        <div class="wide-field update-check-panel">
+          <strong id="managerUpdateStatus">Update status unavailable</strong>
+          <small id="managerUpdateDetail"></small>
+          <div class="actions">
+            <button type="button" data-action="checkManagerUpdate">Check Now</button>
+            <button type="button" data-action="installManagerUpdate">Install Available Update</button>
+          </div>
+        </div>
         <label class="check"><input name="auto_restart" type="checkbox"> Restart server after crash</label>
         <label class="check"><input name="start_on_manager_launch" type="checkbox"> Start server when manager launches</label>
         <label class="check"><input name="update_before_start" type="checkbox"> Update check on scheduled restarts</label>

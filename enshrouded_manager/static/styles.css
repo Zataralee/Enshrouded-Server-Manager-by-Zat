@@ -269,6 +269,21 @@ dd { margin: 0; }
   margin: 0;
   padding-left: 20px;
 }
+.update-check-panel {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #181a17;
+}
+.update-check-panel small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.update-check-panel small.error {
+  color: var(--danger);
+}
 .instance-list {
   display: grid;
   gap: 8px;

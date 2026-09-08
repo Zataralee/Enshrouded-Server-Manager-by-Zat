@@ -2,20 +2,27 @@
 
 ## Current Release
 
-**v0.7.7** - 2026-09-01
+**v0.8.0** - 2026-09-08
 
 Package:
 
 ```text
-release/EnshroudedServerManager-PythonRequired-v0.7.7.zip
+release/EnshroudedServerManager-PythonRequired-v0.8.0.zip
 ```
 
 Changes:
 
-- Added shareable repository documentation for install, use, features, screenshots, and releases.
-- Updated the Python-required release package to include repository docs and screenshots.
+- Added per-server Discord/generic webhook notifications under Server Setup & Config.
+- Added configurable manager update checks against GitHub releases.
+- Added optional self-update package install support for GitHub Release assets.
+- Added webhook notifications for manager update availability.
 
 ## Version History
+
+### v0.7.7 - 2026-09-01
+
+- Added shareable repository documentation for install, use, features, screenshots, and releases.
+- Updated the Python-required release package to include repository docs and screenshots.
 
 ### v0.7.6 - 2026-08-19
 

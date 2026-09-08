@@ -12,6 +12,7 @@ let inviteFormDirty = false;
 let inviteProfilesDirty = false;
 let userListDirty = false;
 let backupScheduleDirty = false;
+let webhookDirty = false;
 let installPoll = null;
 let autoRefreshPoll = null;
 let activeInstanceId = localStorage.getItem("esm_active_instance_id") || "";
@@ -533,6 +534,14 @@ function renderManagerForm() {
   f.max_backup_interval_minutes.value = m.max_backup_interval_minutes || 10080;
   f.max_servers_per_owner.value = m.max_servers_per_owner || 0;
   f.server_create_cooldown_minutes.value = m.server_create_cooldown_minutes || 0;
+  const updates = m.manager_updates || {};
+  f.manager_updates_enabled.checked = updates.enabled !== false;
+  f.manager_updates_repo.value = updates.repo || "Zataralee/Enshrouded-Server-Manager";
+  f.manager_updates_interval_hours.value = updates.interval_hours || 24;
+  f.manager_updates_github_token.placeholder = updates.github_token ? "Saved token hidden; leave blank to keep current" : "GitHub token for private repo";
+  f.manager_updates_clear_github_token.checked = false;
+  f.manager_updates_auto_install.checked = !!updates.auto_install;
+  renderManagerUpdateStatus();
   f.auto_restart.checked = !!inst.auto_restart;
   f.start_on_manager_launch.checked = !!inst.start_on_manager_launch;
   f.update_before_start.checked = !!inst.update_before_start;
@@ -552,6 +561,47 @@ function renderBackupSchedule() {
   form.scheduled_backup_enabled.checked = !!inst.scheduled_backup_enabled;
   form.backup_interval_minutes.value = inst.backup_interval_minutes || 1440;
   form.classList.toggle("hidden", !can("backups"));
+}
+
+function renderWebhookForm() {
+  if (webhookDirty) return;
+  const form = document.querySelector("#webhookForm");
+  if (!form) return;
+  const inst = selectedInstance();
+  const webhook = inst.webhook || {};
+  const events = (state.manager || {}).webhook_events || {};
+  form.classList.toggle("hidden", !can("settings") || !selectedInstanceId());
+  form.enabled.checked = !!webhook.enabled;
+  form.mode.value = webhook.mode || "discord";
+  form.url.placeholder = webhook.url ? "Saved URL hidden; leave blank to keep current" : "Discord or JSON webhook URL";
+  form.clear_url.checked = false;
+  document.querySelector("#webhookEvents").innerHTML = Object.entries(events).map(([key, label]) => `
+    <label class="check"><input type="checkbox" name="events" value="${escapeHtml(key)}" ${(webhook.events || []).includes(key) ? "checked" : ""}> ${escapeHtml(label)}</label>
+  `).join("");
+}
+
+function renderManagerUpdateStatus() {
+  const updates = (state.manager || {}).manager_updates || {};
+  const title = document.querySelector("#managerUpdateStatus");
+  const detail = document.querySelector("#managerUpdateDetail");
+  if (!title || !detail) return;
+  if (updates.last_error) {
+    title.textContent = "Update check has an error";
+    detail.textContent = updates.last_error;
+    detail.classList.add("error");
+    return;
+  }
+  detail.classList.remove("error");
+  if (updates.update_available) {
+    title.textContent = `Manager update available: v${updates.latest_version}`;
+    detail.textContent = updates.latest_url ? `Latest package: ${updates.latest_url}` : "Latest release found, but no package URL was reported.";
+  } else if (updates.last_checked_at) {
+    title.textContent = "Manager is up to date";
+    detail.textContent = `Last checked ${updates.last_checked_at}${updates.latest_version ? `; latest v${updates.latest_version}` : ""}`;
+  } else {
+    title.textContent = "Manager updates have not been checked yet";
+    detail.textContent = "Use Check Now or wait for the scheduled interval.";
+  }
 }
 
 function renderUsers() {
@@ -783,6 +833,7 @@ async function refresh() {
   renderLogs();
   renderManagerForm();
   renderBackupSchedule();
+  renderWebhookForm();
   renderUsers();
   renderInvites();
   renderInstructions();
@@ -1101,6 +1152,26 @@ document.addEventListener("click", async event => {
     }
     if (action === "backup") await api("/api/backup/create", { method: "POST", body: JSON.stringify({ instance_id: selectedInstanceId(), ftp: false }) });
     if (action === "backupFtp") await api("/api/backup/create", { method: "POST", body: JSON.stringify({ instance_id: selectedInstanceId(), ftp: true }) });
+    if (action === "testWebhook") {
+      await api("/api/webhooks/test", { method: "POST", body: JSON.stringify({ instance_id: selectedInstanceId() }) });
+      toast("Test webhook sent");
+      return;
+    }
+    if (action === "checkManagerUpdate") {
+      const result = await api("/api/manager/check-update", { method: "POST" });
+      state.manager.manager_updates = result.manager_updates;
+      renderManagerUpdateStatus();
+      toast(result.manager_updates.update_available ? "Manager update available" : "Manager is up to date");
+      return;
+    }
+    if (action === "installManagerUpdate") {
+      if (!confirm("Install the available manager update package? Restart the manager after it finishes to run the new version.")) return;
+      const result = await api("/api/manager/install-update", { method: "POST" });
+      state.manager.manager_updates = result.manager_updates;
+      renderManagerUpdateStatus();
+      toast("Manager update installed. Restart the manager to use it.");
+      return;
+    }
     if (action === "discoverSaves") {
       const data = await api("/api/savegame/discover");
       discoveredSaves = data.saves || [];
@@ -1180,6 +1251,14 @@ document.querySelector("#managerForm").addEventListener("submit", async event =>
     max_backup_interval_minutes: Number(data.get("max_backup_interval_minutes") || 10080),
     max_servers_per_owner: Number(data.get("max_servers_per_owner") || 0),
     server_create_cooldown_minutes: Number(data.get("server_create_cooldown_minutes") || 0),
+    manager_updates: {
+      enabled: data.has("manager_updates_enabled"),
+      repo: data.get("manager_updates_repo"),
+      interval_hours: Number(data.get("manager_updates_interval_hours") || 24),
+      github_token: data.get("manager_updates_github_token"),
+      clear_github_token: data.has("manager_updates_clear_github_token"),
+      auto_install: data.has("manager_updates_auto_install"),
+    },
   };
   const instancePayload = {
     instance_id: selectedInstanceId(),
@@ -1204,6 +1283,7 @@ document.querySelector("#managerForm").addEventListener("submit", async event =>
   }
   f.password.value = "";
   f.ftp_password.value = "";
+  f.manager_updates_github_token.value = "";
   managerFormDirty = false;
   toast("Manager settings saved. Restart the manager for listen address or port changes.");
   refresh();
@@ -1215,6 +1295,35 @@ document.querySelector("#managerForm").addEventListener("input", () => {
 
 document.querySelector("#managerForm").addEventListener("change", () => {
   managerFormDirty = true;
+});
+
+document.querySelector("#webhookForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const form = event.target;
+  const data = new FormData(form);
+  const payload = {
+    instance_id: selectedInstanceId(),
+    webhook: {
+      enabled: data.has("enabled"),
+      mode: data.get("mode") || "discord",
+      url: data.get("url"),
+      clear_url: data.has("clear_url"),
+      events: [...form.querySelectorAll("[name=events]:checked")].map(el => el.value),
+    },
+  };
+  await api("/api/instances/update", { method: "POST", body: JSON.stringify(payload) });
+  form.url.value = "";
+  webhookDirty = false;
+  toast("Webhook settings saved");
+  refresh();
+});
+
+document.querySelector("#webhookForm").addEventListener("input", () => {
+  webhookDirty = true;
+});
+
+document.querySelector("#webhookForm").addEventListener("change", () => {
+  webhookDirty = true;
 });
 
 document.querySelector("#passwordForm").addEventListener("submit", async event => {
