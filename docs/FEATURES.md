@@ -54,8 +54,10 @@
 ## Webhooks
 
 - Configure a Discord or generic JSON webhook for each server.
+- View all current webhooks for servers your account can manage.
 - Choose which events should be sent.
 - Send test webhooks from the UI.
+- Disable and clear saved webhook URLs from the current webhooks list.
 - Notify server owners/admins when servers start, stop, restart, crash, update, back up, or finish install jobs.
 - Send manager update notifications through configured server webhooks.
 

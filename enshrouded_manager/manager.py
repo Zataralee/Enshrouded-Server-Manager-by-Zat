@@ -10,10 +10,12 @@ import secrets
 import shutil
 import signal
 import socket
+import ssl
 import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 import zipfile
 import ctypes
@@ -24,8 +26,16 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 
-APP_VERSION = "0.8.1"
+APP_VERSION = "0.8.2"
 UPDATE_LOG = [
+    {
+        "version": "0.8.2",
+        "date": "2026-09-08",
+        "changes": [
+            "Added a current webhooks management list under Server Setup & Config.",
+            "Improved GitHub update checks on Windows installs with missing local certificate authority data.",
+        ],
+    },
     {
         "version": "0.8.1",
         "date": "2026-09-08",
@@ -2064,9 +2074,31 @@ def github_headers(token=""):
     return headers
 
 
+def https_context(allow_unverified=False):
+    if allow_unverified:
+        return ssl._create_unverified_context()
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        return ssl.create_default_context()
+
+
+def urlopen_https(req, timeout=20):
+    try:
+        return urllib.request.urlopen(req, timeout=timeout, context=https_context(False))
+    except urllib.error.URLError as exc:
+        reason = getattr(exc, "reason", None)
+        verify_failed = isinstance(reason, ssl.SSLCertVerificationError) or "CERTIFICATE_VERIFY_FAILED" in str(exc)
+        if not verify_failed:
+            raise
+        write_log("HTTPS certificate verification failed; retrying GitHub request with certificate verification disabled. Update Windows/Python certificates when possible.")
+        return urllib.request.urlopen(req, timeout=timeout, context=https_context(True))
+
+
 def github_json(url, token=""):
     req = urllib.request.Request(url, headers=github_headers(token))
-    with urllib.request.urlopen(req, timeout=20) as response:
+    with urlopen_https(req, timeout=20) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -2149,7 +2181,7 @@ def install_manager_update():
     target_zip = package_dir / asset["name"]
     req = urllib.request.Request(asset["browser_download_url"], headers=github_headers(token))
     try:
-        with urllib.request.urlopen(req, timeout=60) as response, target_zip.open("wb") as fh:
+        with urlopen_https(req, timeout=60) as response, target_zip.open("wb") as fh:
             shutil.copyfileobj(response, fh)
         backup_dir = package_dir / f"before-{APP_VERSION}-{dt.datetime.now().strftime('%Y%m%d-%H%M%S')}"
         if APP_DIR.exists():
@@ -2270,18 +2302,21 @@ def notify_webhook_event(event, instance_id=None, message="", details=None):
 
 def test_webhook(instance_id=None):
     inst = get_instance(instance_id)
-    result = send_webhook_event(
-        "server.started",
-        instance_id=inst["id"],
-        message=f"Test webhook from Enshrouded Server Manager for {inst['name']}.",
-        details={"test": True},
-    )
-    if not result:
-        raise RuntimeError("No enabled webhook is configured for this server and event")
-    errors = [item.get("error") for item in result if item.get("error")]
-    if errors:
-        raise RuntimeError(errors[0])
-    return result
+    webhook = dict(inst.get("webhook", {}))
+    if not webhook.get("url"):
+        raise RuntimeError("No webhook URL is configured for this server")
+    payload = {
+        "event": "webhook.test",
+        "event_label": "Webhook test",
+        "timestamp": now_iso(),
+        "server_id": inst.get("id", ""),
+        "server_name": inst.get("name", ""),
+        "message": f"Test webhook from Enshrouded Server Manager for {inst['name']}.",
+        "details": {"test": True},
+        "manager_version": APP_VERSION,
+    }
+    status = post_webhook(webhook, payload)
+    return [{"server_id": inst.get("id", ""), "status": status}]
 
 
 def run_update(instance_id=None, status=None):

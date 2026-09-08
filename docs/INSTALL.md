@@ -91,7 +91,7 @@ New installs can take several minutes. If SteamCMD has to be downloaded for the 
 
 Running game servers are launched as persistent detached processes. Closing or updating the manager should not intentionally stop every running game server.
 
-The Manager tab can check GitHub releases for manager updates. Public repositories do not need a token. If the repository is private, enter a GitHub token with access to read that private repository. Automatic self-update expects the latest GitHub Release to include a Python-required zip package named like `EnshroudedServerManager-PythonRequired-vX.Y.Z.zip`.
+The Manager tab can check GitHub releases for manager updates. Public repositories do not need a token. If the repository is private, enter a GitHub token with access to read that private repository. Automatic self-update expects the latest GitHub Release to include a Python-required zip package named like `EnshroudedServerManager-PythonRequired-vX.Y.Z.zip`. If a Windows Python install has broken certificate authority data, the manager logs that certificate verification failed and retries the GitHub request so update checks still work.
 
 To update the manager:
 

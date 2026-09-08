@@ -578,6 +578,32 @@ function renderWebhookForm() {
   document.querySelector("#webhookEvents").innerHTML = Object.entries(events).map(([key, label]) => `
     <label class="check"><input type="checkbox" name="events" value="${escapeHtml(key)}" ${(webhook.events || []).includes(key) ? "checked" : ""}> ${escapeHtml(label)}</label>
   `).join("");
+  renderCurrentWebhooks();
+}
+
+function renderCurrentWebhooks() {
+  const target = document.querySelector("#currentWebhookList");
+  if (!target) return;
+  const events = (state.manager || {}).webhook_events || {};
+  const rows = (state.instances || []).map(inst => {
+    const webhook = inst.webhook || {};
+    const configured = !!webhook.url;
+    const enabled = !!webhook.enabled && configured;
+    const eventNames = (webhook.events || []).map(key => events[key] || key);
+    return `
+      <div class="instance-row webhook-row ${inst.id === selectedInstanceId() ? "active" : ""}">
+        <div>
+          <strong>${escapeHtml(inst.name || inst.id)}</strong>
+          <small>${enabled ? "Enabled" : configured ? "Saved but disabled" : "No webhook configured"} - ${escapeHtml(webhook.mode || "discord")}</small>
+          <small>${eventNames.length ? escapeHtml(eventNames.join(", ")) : "No events selected"}</small>
+        </div>
+        <span>${configured ? "URL saved" : "No URL"}</span>
+        <button type="button" data-edit-webhook="${escapeHtml(inst.id)}">Edit</button>
+        <button type="button" data-disable-webhook="${escapeHtml(inst.id)}" ${configured ? "" : "disabled"}>Disable & Clear</button>
+      </div>
+    `;
+  });
+  target.innerHTML = rows.length ? rows.join("") : "<p>No servers are visible to this account.</p>";
 }
 
 function renderManagerUpdateStatus() {
@@ -1096,6 +1122,30 @@ document.addEventListener("click", async event => {
     if (!confirm("Delete this manager user?")) return;
     await api("/api/users/delete", { method: "POST", body: JSON.stringify({ user_id: btn.dataset.deleteUser }) });
     toast("User deleted");
+    refresh();
+    return;
+  }
+  if (btn.dataset.editWebhook) {
+    activeInstanceId = btn.dataset.editWebhook;
+    localStorage.setItem("esm_active_instance_id", activeInstanceId);
+    webhookDirty = false;
+    await api("/api/instances/select", { method: "POST", body: JSON.stringify({ instance_id: activeInstanceId }) });
+    toast("Webhook selected for editing");
+    refresh();
+    return;
+  }
+  if (btn.dataset.disableWebhook) {
+    const inst = (state.instances || []).find(item => item.id === btn.dataset.disableWebhook);
+    if (!confirm(`Disable and clear the webhook URL for ${inst?.name || "this server"}?`)) return;
+    await api("/api/instances/update", {
+      method: "POST",
+      body: JSON.stringify({
+        instance_id: btn.dataset.disableWebhook,
+        webhook: { enabled: false, clear_url: true, events: [] },
+      }),
+    });
+    webhookDirty = false;
+    toast("Webhook disabled");
     refresh();
     return;
   }

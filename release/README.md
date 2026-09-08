@@ -1,6 +1,6 @@
 # Current Release
 
-Current package: `EnshroudedServerManager-PythonRequired-v0.8.1.zip`
+Current package: `EnshroudedServerManager-PythonRequired-v0.8.2.zip`
 
 This package is for a Windows machine that already has Python 3.11 or newer installed.
 

@@ -2,19 +2,24 @@
 
 ## Current Release
 
-**v0.8.1** - 2026-09-08
+**v0.8.2** - 2026-09-08
 
 Package:
 
 ```text
-release/EnshroudedServerManager-PythonRequired-v0.8.1.zip
+release/EnshroudedServerManager-PythonRequired-v0.8.2.zip
 ```
 
 Changes:
 
-- Updated the default GitHub update-check repository after the project moved.
+- Added a current webhooks management list under Server Setup & Config.
+- Improved GitHub update checks on Windows installs with missing local certificate authority data.
 
 ## Version History
+
+### v0.8.1 - 2026-09-08
+
+- Updated the default GitHub update-check repository after the project moved.
 
 ### v0.8.0 - 2026-09-08
 
