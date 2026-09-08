@@ -225,26 +225,27 @@
 
     <section id="webhooks" class="tab">
       <form id="webhookForm" class="panel form-grid">
-        <h2>Server Webhook</h2>
-        <p class="form-note">Send selected server and manager update events to Discord or another webhook receiver. Webhook URLs are stored like secrets and hidden after saving.</p>
-        <label class="check"><input name="enabled" type="checkbox"> Enable webhook for this server</label>
+        <h2 id="webhookFormTitle">Add Webhook</h2>
+        <p id="webhookServerNote" class="form-note"></p>
+        <p class="form-note">Add one or more Discord or generic JSON destinations for this server. Webhook URLs are stored like secrets and hidden after saving.</p>
+        <label>Webhook name <input name="name" maxlength="80" placeholder="Example: Admin Discord"></label>
         <label>Mode
           <select name="mode">
             <option value="discord">Discord</option>
             <option value="json">Generic JSON</option>
           </select>
         </label>
-        <label class="wide-field">Webhook URL <input name="url" type="password" placeholder="Leave blank to keep current URL"></label>
-        <label class="check"><input name="clear_url" type="checkbox"> Clear saved webhook URL</label>
+        <label class="wide-field">Webhook URL <input name="url" type="password" placeholder="Discord or JSON webhook URL"></label>
+        <label class="check wide-field"><input name="enabled" type="checkbox"> Enabled</label>
         <div id="webhookEvents" class="perm-grid"></div>
         <div class="actions wide-field">
-          <button type="submit">Save Webhook</button>
-          <button type="button" data-action="testWebhook">Send Test Webhook</button>
+          <button id="saveWebhookButton" type="submit">Add Webhook</button>
+          <button id="cancelWebhookEdit" type="button" data-cancel-webhook-edit class="hidden">Cancel Edit</button>
         </div>
       </form>
       <div class="panel">
         <h2>Current Webhooks</h2>
-        <p class="form-note">These are the webhooks configured for servers you can manage. Select a row to edit it above, or disable it to remove the saved URL.</p>
+        <p id="currentWebhookNote" class="form-note"></p>
         <div id="currentWebhookList" class="instance-list"></div>
       </div>
     </section>

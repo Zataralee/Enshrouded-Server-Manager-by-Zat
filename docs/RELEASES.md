@@ -2,20 +2,27 @@
 
 ## Current Release
 
-**v0.8.2** - 2026-09-08
+**v0.9.0** - 2026-09-08
 
 Package:
 
 ```text
-release/EnshroudedServerManager-PythonRequired-v0.8.2.zip
+release/EnshroudedServerManager-PythonRequired-v0.9.0.zip
 ```
 
 Changes:
 
-- Added a current webhooks management list under Server Setup & Config.
-- Improved GitHub update checks on Windows installs with missing local certificate authority data.
+- Changed webhooks to a per-server list with support for multiple destinations.
+- Limited Current Webhooks to the server selected in the header.
+- Added independent add, edit, test, enable/disable, and delete controls for each webhook.
+- Existing single-webhook configurations migrate automatically.
 
 ## Version History
+
+### v0.8.2 - 2026-09-08
+
+- Added a current webhooks management list under Server Setup & Config.
+- Improved GitHub update checks on Windows installs with missing local certificate authority data.
 
 ### v0.8.1 - 2026-09-08
 

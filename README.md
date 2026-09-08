@@ -2,9 +2,9 @@
 
 A Windows-friendly web manager for running one or more Enshrouded dedicated server instances from a browser.
 
-Current release: **v0.8.2**
+Current release: **v0.9.0**
 
-Shareable package: [`release/EnshroudedServerManager-PythonRequired-v0.8.2.zip`](release/EnshroudedServerManager-PythonRequired-v0.8.2.zip)
+Shareable package: [`release/EnshroudedServerManager-PythonRequired-v0.9.0.zip`](release/EnshroudedServerManager-PythonRequired-v0.9.0.zip)
 
 ![Enshrouded Server Manager dashboard](docs/screenshots/dashboard.png)
 
@@ -21,7 +21,7 @@ Shareable package: [`release/EnshroudedServerManager-PythonRequired-v0.8.2.zip`]
 - Supports admin-created users, invite-code account creation, server-owner scoped users, and role-based visibility.
 - Imports local player worlds into a dedicated server workflow.
 - Creates local backups and optional FTP backups.
-- Sends Discord or generic JSON webhook notifications for server and manager update events.
+- Supports multiple Discord or generic JSON webhooks per server for server and manager update events.
 - Checks GitHub releases for manager updates on an admin-configured interval.
 - Includes an in-app Instructions tab and Updates tab.
 
@@ -29,7 +29,7 @@ Shareable package: [`release/EnshroudedServerManager-PythonRequired-v0.8.2.zip`]
 
 Use the Python-required release if Python 3.11 or newer is already installed on the server.
 
-1. Download [`release/EnshroudedServerManager-PythonRequired-v0.8.2.zip`](release/EnshroudedServerManager-PythonRequired-v0.8.2.zip).
+1. Download [`release/EnshroudedServerManager-PythonRequired-v0.9.0.zip`](release/EnshroudedServerManager-PythonRequired-v0.9.0.zip).
 2. Extract it to the machine that will host the manager.
 3. Run `Run Enshrouded Server Manager.bat`.
 4. Open `http://127.0.0.1:8080` on that machine.

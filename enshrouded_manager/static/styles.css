@@ -307,11 +307,11 @@ dd { margin: 0; }
 }
 .instance-row span { color: var(--muted); }
 .webhook-row {
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
 }
-.webhook-row button:disabled {
-  opacity: .45;
-  cursor: not-allowed;
+.webhook-actions {
+  justify-content: flex-end;
+  margin: 0;
 }
 .install-status .progress-line {
   display: flex;

@@ -177,6 +177,14 @@ Logs are helpful when:
 - You need to confirm whether an update or backup ran.
 - A setting did not behave as expected.
 
+## Webhooks
+
+Use `Server Setup & Config` > `Webhooks` to configure notifications for the server selected in the header.
+
+Each server has its own webhook list. You will only see webhooks for the currently selected server. A server can have multiple webhooks, and each one can use a different name, destination, mode, and set of events.
+
+Use `Add Webhook` for a new destination. Current Webhooks lets you edit, test, enable or disable, and delete each saved webhook independently. Saved URLs are hidden after saving.
+
 ## Saves & Backups
 
 Use `Server Setup & Config` > `Saves & Backups` to:

@@ -19,6 +19,7 @@ Included features:
 - Remove server instances from the manager registry without deleting server files.
 - Monitor each persistent server process and restart it after crashes unless it was stopped from the UI.
 - Edit `enshrouded_server.json`, user groups, bans, logs, and scheduled restarts.
+- Configure multiple Discord or generic JSON webhooks independently for each server.
 - Upload a zipped savegame into the server `savegame` folder. The current save is backed up first.
 - Create local save/config backups and optionally push them to an FTP server.
 - Build a distributable zip with `enshrouded_manager\build_zip.ps1`.

@@ -26,8 +26,18 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 
-APP_VERSION = "0.8.2"
+APP_VERSION = "0.9.0"
 UPDATE_LOG = [
+    {
+        "version": "0.9.0",
+        "date": "2026-09-08",
+        "changes": [
+            "Changed webhooks to a per-server list with support for multiple webhook destinations.",
+            "Limited the Current Webhooks list to the server selected in the header.",
+            "Added independent add, edit, test, enable/disable, and delete controls for each webhook.",
+            "Added automatic migration for webhook settings saved by earlier manager versions.",
+        ],
+    },
     {
         "version": "0.8.2",
         "date": "2026-09-08",
@@ -295,12 +305,32 @@ def default_ftp_backup():
     }
 
 
-def default_webhook():
+def default_webhook(name="Webhook"):
     return {
+        "id": secrets.token_hex(8),
+        "name": name,
         "enabled": False,
         "mode": "discord",
         "url": "",
         "events": list(DEFAULT_WEBHOOK_EVENTS),
+    }
+
+
+def normalize_webhook(webhook, default_name="Webhook"):
+    source = webhook if isinstance(webhook, dict) else {}
+    mode = source.get("mode", "discord")
+    if mode not in {"discord", "json"}:
+        mode = "discord"
+    events = source.get("events", DEFAULT_WEBHOOK_EVENTS)
+    if not isinstance(events, list):
+        events = list(DEFAULT_WEBHOOK_EVENTS)
+    return {
+        "id": str(source.get("id") or secrets.token_hex(8)),
+        "name": str(source.get("name") or default_name).strip()[:80] or default_name,
+        "enabled": bool(source.get("enabled", False)),
+        "mode": mode,
+        "url": str(source.get("url") or "").strip(),
+        "events": [event for event in events if event in WEBHOOK_EVENTS],
     }
 
 
@@ -336,7 +366,7 @@ def default_instance(name, path):
         "last_backup_key": "",
         "scheduled_restarts": [],
         "ftp_backup": default_ftp_backup(),
-        "webhook": default_webhook(),
+        "webhooks": [],
         "created_at": now_iso(),
         "save_imports": [],
         "pid": 0,
@@ -949,7 +979,7 @@ def migrate_config(cfg):
             "last_backup_key": "",
             "scheduled_restarts": cfg.get("scheduled_restarts", []),
             "ftp_backup": cfg.get("ftp_backup", default_ftp_backup()),
-            "webhook": default_webhook(),
+            "webhooks": [],
             "created_at": now_iso(),
             "save_imports": [],
             "pid": 0,
@@ -963,6 +993,25 @@ def migrate_config(cfg):
             if key not in inst:
                 inst[key] = value
                 changed = True
+        legacy_webhook = inst.pop("webhook", None)
+        if legacy_webhook is not None:
+            if isinstance(legacy_webhook, dict) and (legacy_webhook.get("url") or legacy_webhook.get("enabled")):
+                inst.setdefault("webhooks", []).insert(0, normalize_webhook(legacy_webhook, "Primary Webhook"))
+            changed = True
+        current_webhooks = inst.get("webhooks", [])
+        if not isinstance(current_webhooks, list):
+            current_webhooks = []
+        normalized_webhooks = []
+        used_webhook_ids = set()
+        for index, webhook in enumerate(current_webhooks, start=1):
+            normalized = normalize_webhook(webhook, f"Webhook {index}")
+            while normalized["id"] in used_webhook_ids:
+                normalized["id"] = secrets.token_hex(8)
+            used_webhook_ids.add(normalized["id"])
+            normalized_webhooks.append(normalized)
+        if normalized_webhooks != inst.get("webhooks"):
+            inst["webhooks"] = normalized_webhooks
+            changed = True
     return changed
 
 
@@ -1258,6 +1307,7 @@ def public_config(user=None):
     cfg["app_version"] = APP_VERSION
     cfg["update_log"] = UPDATE_LOG
     cfg["webhook_events"] = WEBHOOK_EVENTS
+    cfg["default_webhook_events"] = DEFAULT_WEBHOOK_EVENTS
     if user:
         cfg["current_user"] = user_public(user)
     return cfg
@@ -1485,10 +1535,14 @@ def public_instance(inst):
     if ftp.get("password"):
         ftp["password"] = "********"
     item["ftp_backup"] = ftp
-    webhook = dict(item.get("webhook", default_webhook()))
-    if webhook.get("url"):
-        webhook["url"] = "********"
-    item["webhook"] = webhook
+    webhooks = []
+    for webhook in item.get("webhooks", []):
+        public_webhook = dict(webhook)
+        if public_webhook.get("url"):
+            public_webhook["url"] = "********"
+        webhooks.append(public_webhook)
+    item["webhooks"] = webhooks
+    item.pop("webhook", None)
     item["installed"] = (Path(inst["path"]) / "enshrouded_server.exe").exists()
     item["config_exists"] = (Path(inst["path"]) / "enshrouded_server.json").exists()
     item["query_port"] = instance_query_port(inst["id"]) if item["config_exists"] else DEFAULT_QUERY_PORT
@@ -1498,6 +1552,8 @@ def public_instance(inst):
 def public_removed_instance(inst):
     item = dict(inst)
     item.pop("ftp_backup", None)
+    item.pop("webhook", None)
+    item.pop("webhooks", None)
     return item
 
 
@@ -1599,23 +1655,79 @@ def update_instance(instance_id, patch):
                 ftp["password"] = incoming["password"]
             target["ftp_backup"] = ftp
         if "webhook" in patch:
-            webhook = dict(target.get("webhook", default_webhook()))
-            incoming = patch["webhook"]
-            for key in ["enabled", "mode"]:
-                if key in incoming:
-                    webhook[key] = incoming[key]
-            if "events" in incoming:
-                webhook["events"] = [event for event in incoming.get("events", []) if event in WEBHOOK_EVENTS]
-            if incoming.get("url") and incoming.get("url") != "********":
-                webhook["url"] = incoming["url"].strip()
-            if incoming.get("clear_url"):
-                webhook["url"] = ""
-            if webhook.get("mode") not in {"discord", "json"}:
-                webhook["mode"] = "discord"
-            target["webhook"] = webhook
+            incoming = dict(patch["webhook"])
+            if target.get("webhooks"):
+                incoming.setdefault("id", target["webhooks"][0].get("id"))
+            upsert_webhook_on_instance(target, incoming, allow_empty_url=True)
         save_json(MANAGER_CONFIG, cfg)
     write_log(f"Updated server instance {instance_id}")
     return get_instance(instance_id)
+
+
+def upsert_webhook_on_instance(instance, incoming, allow_empty_url=False):
+    webhooks = instance.setdefault("webhooks", [])
+    webhook_id = str(incoming.get("id") or "").strip()
+    current = next((item for item in webhooks if item.get("id") == webhook_id), None)
+    if webhook_id and current is None:
+        raise FileNotFoundError("Unknown webhook for this server")
+    creating = current is None
+    if creating:
+        current = default_webhook(f"Webhook {len(webhooks) + 1}")
+        if webhook_id:
+            current["id"] = webhook_id
+        webhooks.append(current)
+
+    if "name" in incoming:
+        current["name"] = str(incoming.get("name") or "").strip()[:80]
+    if not current.get("name"):
+        current["name"] = f"Webhook {webhooks.index(current) + 1}"
+    if "enabled" in incoming:
+        current["enabled"] = bool(incoming["enabled"])
+    if "mode" in incoming:
+        current["mode"] = incoming["mode"] if incoming["mode"] in {"discord", "json"} else "discord"
+    if "events" in incoming:
+        current["events"] = [event for event in incoming.get("events", []) if event in WEBHOOK_EVENTS]
+    incoming_url = str(incoming.get("url") or "").strip()
+    if incoming_url and incoming_url != "********":
+        parsed = urlparse(incoming_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("Webhook URL must be a complete http:// or https:// URL")
+        current["url"] = incoming_url
+    if incoming.get("clear_url"):
+        current["url"] = ""
+    if not current.get("url") and not allow_empty_url:
+        if creating:
+            webhooks.remove(current)
+        raise ValueError("Webhook URL is required")
+    return current
+
+
+def save_instance_webhook(instance_id, incoming):
+    with CONFIG_LOCK:
+        cfg = config()
+        target = next((inst for inst in cfg.get("instances", []) if inst.get("id") == instance_id), None)
+        if target is None:
+            raise FileNotFoundError("Unknown server instance")
+        webhook = upsert_webhook_on_instance(target, incoming)
+        save_json(MANAGER_CONFIG, cfg)
+    write_log(f"Saved webhook {webhook['name']} for server instance {instance_id}")
+    return webhook
+
+
+def delete_instance_webhook(instance_id, webhook_id):
+    with CONFIG_LOCK:
+        cfg = config()
+        target = next((inst for inst in cfg.get("instances", []) if inst.get("id") == instance_id), None)
+        if target is None:
+            raise FileNotFoundError("Unknown server instance")
+        webhooks = target.setdefault("webhooks", [])
+        webhook = next((item for item in webhooks if item.get("id") == webhook_id), None)
+        if webhook is None:
+            raise FileNotFoundError("Unknown webhook for this server")
+        target["webhooks"] = [item for item in webhooks if item.get("id") != webhook_id]
+        save_json(MANAGER_CONFIG, cfg)
+    write_log(f"Deleted webhook {webhook.get('name', webhook_id)} from server instance {instance_id}")
+    return True
 
 
 def safe_delete_server_directory(server_path):
@@ -2237,15 +2349,15 @@ def webhook_targets(event, instance_id=None):
         candidates = instances()
     seen = set()
     for inst in candidates:
-        webhook = inst.get("webhook", {})
-        url = webhook.get("url", "").strip()
-        if not webhook.get("enabled") or not url or event not in webhook.get("events", []):
-            continue
-        key = (url, webhook.get("mode", "discord"))
-        if key in seen:
-            continue
-        seen.add(key)
-        targets.append((inst, dict(webhook)))
+        for webhook in inst.get("webhooks", []):
+            url = webhook.get("url", "").strip()
+            if not webhook.get("enabled") or not url or event not in webhook.get("events", []):
+                continue
+            key = (url, webhook.get("mode", "discord"))
+            if key in seen:
+                continue
+            seen.add(key)
+            targets.append((inst, dict(webhook)))
     return targets
 
 
@@ -2289,7 +2401,7 @@ def send_webhook_event(event, instance_id=None, message="", details=None):
         }
         try:
             status = post_webhook(webhook, payload)
-            sent.append({"server_id": inst.get("id", ""), "status": status})
+            sent.append({"server_id": inst.get("id", ""), "webhook_id": webhook.get("id", ""), "status": status})
         except Exception as exc:
             write_log(f"Webhook delivery failed for {inst.get('name', 'manager')}: {exc}")
             sent.append({"server_id": inst.get("id", ""), "error": str(exc)})
@@ -2300,9 +2412,11 @@ def notify_webhook_event(event, instance_id=None, message="", details=None):
     threading.Thread(target=send_webhook_event, args=(event, instance_id, message, details or {}), daemon=True).start()
 
 
-def test_webhook(instance_id=None):
+def test_webhook(instance_id, webhook_id):
     inst = get_instance(instance_id)
-    webhook = dict(inst.get("webhook", {}))
+    webhook = next((dict(item) for item in inst.get("webhooks", []) if item.get("id") == webhook_id), None)
+    if webhook is None:
+        raise FileNotFoundError("Unknown webhook for this server")
     if not webhook.get("url"):
         raise RuntimeError("No webhook URL is configured for this server")
     payload = {
@@ -2316,7 +2430,7 @@ def test_webhook(instance_id=None):
         "manager_version": APP_VERSION,
     }
     status = post_webhook(webhook, payload)
-    return [{"server_id": inst.get("id", ""), "status": status}]
+    return [{"server_id": inst.get("id", ""), "webhook_id": webhook.get("id", ""), "status": status}]
 
 
 def run_update(instance_id=None, status=None):
@@ -2395,12 +2509,6 @@ def start_install_job(body, user):
         folder_name=body.get("folder_name") or "",
         query_port=query_port,
     )
-    notify_webhook_event(
-        "server.install.started",
-        message=f"Server install started for {body.get('name') or body.get('folder_name') or 'Enshrouded Server'}.",
-        details={"job_id": job_id, "query_port": query_port},
-    )
-
     def runner():
         try:
             def status(message):
@@ -2430,11 +2538,6 @@ def start_install_job(body, user):
         except Exception as exc:
             update_job(job_id, status="failed", message="Install failed", error=str(exc))
             write_log(f"Install job {job_id} failed: {exc}")
-            notify_webhook_event(
-                "server.install.failed",
-                message=f"Server install failed: {exc}",
-                details={"job_id": job_id, "error": str(exc), "instance_name": body.get("name") or body.get("folder_name") or ""},
-            )
 
     threading.Thread(target=runner, daemon=True).start()
     return job_id
@@ -3253,7 +3356,21 @@ class Handler(SimpleHTTPRequestHandler):
                     return
                 body = self.json_body()
                 inst = get_instance_for_user(self.current_user(), body.get("instance_id"))
-                return self.send_json({"ok": True, "result": test_webhook(inst["id"])})
+                return self.send_json({"ok": True, "result": test_webhook(inst["id"], body.get("webhook_id", ""))})
+            if route == "/api/webhooks/save":
+                if not self.require_perm("settings"):
+                    return
+                body = self.json_body()
+                inst = get_instance_for_user(self.current_user(), body.get("instance_id"))
+                webhook = save_instance_webhook(inst["id"], body.get("webhook", {}))
+                return self.send_json({"ok": True, "instance": public_instance(get_instance(inst["id"])), "webhook_id": webhook["id"]})
+            if route == "/api/webhooks/delete":
+                if not self.require_perm("settings"):
+                    return
+                body = self.json_body()
+                inst = get_instance_for_user(self.current_user(), body.get("instance_id"))
+                delete_instance_webhook(inst["id"], body.get("webhook_id", ""))
+                return self.send_json({"ok": True, "instance": public_instance(get_instance(inst["id"]))})
             if route == "/api/users/create":
                 if not self.require_admin():
                     return
