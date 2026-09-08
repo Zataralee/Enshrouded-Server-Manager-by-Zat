@@ -24,8 +24,15 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 
-APP_VERSION = "0.8.0"
+APP_VERSION = "0.8.1"
 UPDATE_LOG = [
+    {
+        "version": "0.8.1",
+        "date": "2026-09-08",
+        "changes": [
+            "Updated the default GitHub update-check repository after the project moved.",
+        ],
+    },
     {
         "version": "0.8.0",
         "date": "2026-09-08",
@@ -150,7 +157,7 @@ MANAGER_LOG = DATA_DIR / "manager.log"
 APP_ID = "2278520"
 STEAMCMD_URL = "https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip"
 DEFAULT_QUERY_PORT = 15637
-GITHUB_REPO = "Zataralee/Enshrouded-Server-Manager"
+GITHUB_REPO = "Zataralee/Enshrouded-Server-Manager-by-Zat"
 RELEASE_PACKAGE_PREFIX = "EnshroudedServerManager-PythonRequired"
 SAVE_WORLD_RE = re.compile(r"^([0-9a-fA-F]{8,16})(?:$|[-_].*)")
 DEFAULT_SERVER_WORLD_ID = "3ad85aea"

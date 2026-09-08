@@ -2,9 +2,9 @@
 
 A Windows-friendly web manager for running one or more Enshrouded dedicated server instances from a browser.
 
-Current release: **v0.8.0**
+Current release: **v0.8.1**
 
-Shareable package: [`release/EnshroudedServerManager-PythonRequired-v0.8.0.zip`](release/EnshroudedServerManager-PythonRequired-v0.8.0.zip)
+Shareable package: [`release/EnshroudedServerManager-PythonRequired-v0.8.1.zip`](release/EnshroudedServerManager-PythonRequired-v0.8.1.zip)
 
 ![Enshrouded Server Manager dashboard](docs/screenshots/dashboard.png)
 
@@ -29,7 +29,7 @@ Shareable package: [`release/EnshroudedServerManager-PythonRequired-v0.8.0.zip`]
 
 Use the Python-required release if Python 3.11 or newer is already installed on the server.
 
-1. Download [`release/EnshroudedServerManager-PythonRequired-v0.8.0.zip`](release/EnshroudedServerManager-PythonRequired-v0.8.0.zip).
+1. Download [`release/EnshroudedServerManager-PythonRequired-v0.8.1.zip`](release/EnshroudedServerManager-PythonRequired-v0.8.1.zip).
 2. Extract it to the machine that will host the manager.
 3. Run `Run Enshrouded Server Manager.bat`.
 4. Open `http://127.0.0.1:8080` on that machine.

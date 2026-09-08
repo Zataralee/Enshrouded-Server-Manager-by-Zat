@@ -536,7 +536,7 @@ function renderManagerForm() {
   f.server_create_cooldown_minutes.value = m.server_create_cooldown_minutes || 0;
   const updates = m.manager_updates || {};
   f.manager_updates_enabled.checked = updates.enabled !== false;
-  f.manager_updates_repo.value = updates.repo || "Zataralee/Enshrouded-Server-Manager";
+  f.manager_updates_repo.value = updates.repo || "Zataralee/Enshrouded-Server-Manager-by-Zat";
   f.manager_updates_interval_hours.value = updates.interval_hours || 24;
   f.manager_updates_github_token.placeholder = updates.github_token ? "Saved token hidden; leave blank to keep current" : "GitHub token for private repo";
   f.manager_updates_clear_github_token.checked = false;
