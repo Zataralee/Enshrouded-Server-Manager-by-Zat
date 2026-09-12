@@ -15,3 +15,7 @@ http://127.0.0.1:8080
 ```
 
 The package includes install notes, user instructions, feature notes, release notes, and screenshots.
+
+## Experimental Linux Test
+
+`ESM-Z-Linux-PythonRequired-v0.10.0-linux-alpha.1.tar.gz` is an unsupported test build for Linux hosts. Follow `docs/LINUX_ALPHA.md`; do not use it for production hosting or important worlds without a separate backup.

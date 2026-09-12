@@ -18,7 +18,7 @@ class BrandingReleaseTests(unittest.TestCase):
             ]
         }
 
-        selected = manager.find_release_asset(release)
+        selected = manager.find_release_asset(release, platform_name="windows")
 
         self.assertEqual("ESM-Z-PythonRequired-v0.9.1.zip", selected["name"])
 
@@ -29,7 +29,7 @@ class BrandingReleaseTests(unittest.TestCase):
             ]
         }
 
-        selected = manager.find_release_asset(release)
+        selected = manager.find_release_asset(release, platform_name="windows")
 
         self.assertEqual("EnshroudedServerManager-PythonRequired-v0.9.1.zip", selected["name"])
 

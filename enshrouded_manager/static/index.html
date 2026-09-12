@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ESM-Z</title>
-    <link rel="stylesheet" href="/styles.css?v=20260908-update-status">
+    <link rel="stylesheet" href="/styles.css?v=20260911-linux-alpha">
 </head>
 <body>
   <div id="login" class="login hidden">
@@ -365,6 +365,24 @@
         <label>Maximum backup interval minutes <input name="max_backup_interval_minutes" type="number" min="1"></label>
         <label>Max servers per server owner <input name="max_servers_per_owner" type="number" min="0"></label>
         <label>Server creation cooldown minutes <input name="server_create_cooldown_minutes" type="number" min="0"></label>
+        <div id="linuxRuntimeSettings" class="wide-field hidden">
+          <h2>Linux Compatibility Runtime</h2>
+          <div class="form-grid compact">
+            <label>Runtime
+              <select name="linux_runtime">
+                <option value="auto">Automatic</option>
+                <option value="proton">Proton</option>
+                <option value="wine">Wine</option>
+              </select>
+            </label>
+            <label>Runtime executable <input name="linux_runtime_path" placeholder="Leave blank for automatic detection"></label>
+          </div>
+          <div class="runtime-status">
+            <strong id="linuxRuntimeStatus">Checking compatibility runtime</strong>
+            <small id="linuxRuntimeDetail"></small>
+          </div>
+          <p class="form-note">Experimental Linux support runs the Windows Enshrouded server through Wine or Proton. Install one of these runtimes or enter its executable path above.</p>
+        </div>
         <h2>ESM-Z Updates</h2>
         <label class="check"><input name="manager_updates_enabled" type="checkbox"> Check GitHub for ESM-Z updates</label>
         <label>Check interval hours <input name="manager_updates_interval_hours" type="number" min="1"></label>
@@ -409,6 +427,6 @@
 
     <div id="toast"></div>
   </main>
-  <script src="/app.js?v=20260908-update-status"></script>
+  <script src="/app.js?v=20260911-linux-alpha"></script>
 </body>
 </html>

@@ -2,9 +2,11 @@
 
 **ESM-Z — Enshrouded Server Manager by Zat** is a Windows-friendly web manager for running one or more Enshrouded dedicated server instances from a browser.
 
-The current release supports Windows hosts. Linux host support is designed but not yet implemented; see the linked architecture analysis before planning a Linux deployment.
+The stable release supports Windows hosts. Experimental Linux compatibility work is available only on the `codex/linux-alpha` branch and must not be treated as production Linux support.
 
 Current release: **v0.9.1**
+
+Experimental prerelease: **v0.10.0-linux-alpha.1**
 
 Shareable package: [`release/ESM-Z-PythonRequired-v0.9.1.zip`](release/ESM-Z-PythonRequired-v0.9.1.zip)
 
@@ -59,6 +61,7 @@ New installs can take several minutes. If SteamCMD is being downloaded for the f
 - [Release Notes](docs/RELEASES.md)
 - [Screenshots](docs/SCREENSHOTS.md)
 - [Linux Host Support Analysis](docs/LINUX_SUPPORT_ANALYSIS.md)
+- [Linux Alpha Test Guide](docs/LINUX_ALPHA.md)
 - [User Guide](enshrouded_manager/USER_README.md)
 - [Admin Notes](enshrouded_manager/README.md)
 

@@ -4,7 +4,9 @@
 
 Analysis date: 2026-09-08  
 Repository baseline: v0.9.0  
-Decision status: architecture recommendation only; Linux runtime support is not implemented
+Decision status: experimental Linux prototype implemented on a test branch; production Linux support is not implemented
+
+Prototype update (2026-09-11): `v0.10.0-linux-alpha.1` implements the first user-session prototype with Linux SteamCMD, Wine/Proton discovery, per-instance compatibility data, and process groups. The uncompleted systemd, host-adapter, distribution-matrix, process-fingerprint, and real-hardware validation work described below remains required for a supported Linux release.
 
 ## A. Executive Summary
 

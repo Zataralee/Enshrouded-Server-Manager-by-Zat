@@ -536,6 +536,17 @@ function renderManagerForm() {
   f.max_backup_interval_minutes.value = m.max_backup_interval_minutes || 10080;
   f.max_servers_per_owner.value = m.max_servers_per_owner || 0;
   f.server_create_cooldown_minutes.value = m.server_create_cooldown_minutes || 0;
+  const runtime = m.host_runtime || { host: "windows", available: true };
+  const runtimePanel = document.querySelector("#linuxRuntimeSettings");
+  runtimePanel.classList.toggle("hidden", runtime.host !== "linux");
+  if (runtime.host === "linux") {
+    f.linux_runtime.value = m.linux_runtime || "auto";
+    f.linux_runtime_path.value = m.linux_runtime_path || "";
+    const runtimeStatus = document.querySelector("#linuxRuntimeStatus");
+    runtimeStatus.textContent = runtime.available ? `Ready: ${runtime.runtime}` : "Compatibility runtime missing";
+    runtimeStatus.className = runtime.available ? "available" : "missing";
+    document.querySelector("#linuxRuntimeDetail").textContent = runtime.path ? `${runtime.message}: ${runtime.path}` : runtime.message;
+  }
   const updates = m.manager_updates || {};
   f.manager_updates_enabled.checked = updates.enabled !== false;
   f.manager_updates_repo.value = updates.repo || "Zataralee/Enshrouded-Server-Manager-by-Zat";
@@ -1392,6 +1403,8 @@ document.querySelector("#managerForm").addEventListener("submit", async event =>
     max_backup_interval_minutes: Number(data.get("max_backup_interval_minutes") || 10080),
     max_servers_per_owner: Number(data.get("max_servers_per_owner") || 0),
     server_create_cooldown_minutes: Number(data.get("server_create_cooldown_minutes") || 0),
+    linux_runtime: data.get("linux_runtime") || "auto",
+    linux_runtime_path: data.get("linux_runtime_path") || "",
     manager_updates: {
       enabled: data.has("manager_updates_enabled"),
       repo: data.get("manager_updates_repo"),

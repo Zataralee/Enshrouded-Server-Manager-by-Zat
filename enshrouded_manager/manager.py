@@ -13,6 +13,7 @@ import socket
 import ssl
 import subprocess
 import sys
+import tarfile
 import threading
 import time
 import urllib.error
@@ -26,8 +27,19 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 
-APP_VERSION = "0.9.1"
+APP_VERSION = "0.10.0-linux-alpha.1"
 UPDATE_LOG = [
+    {
+        "version": "0.10.0-linux-alpha.1",
+        "date": "2026-09-11",
+        "changes": [
+            "Added experimental Linux host support through Proton or Wine.",
+            "Added Linux SteamCMD installation and Windows dedicated-server depot downloads.",
+            "Added per-server compatibility data, Linux process-group lifecycle control, and Linux save discovery paths.",
+            "Added Linux runtime diagnostics and selection to Manager settings.",
+            "Added a Linux test package and installation guide.",
+        ],
+    },
     {
         "version": "0.9.1",
         "date": "2026-09-08",
@@ -186,10 +198,13 @@ BACKUP_DIR = DATA_DIR / "backups"
 IMPORT_DIR = DATA_DIR / "imports"
 MANAGER_LOG = DATA_DIR / "manager.log"
 APP_ID = "2278520"
-STEAMCMD_URL = "https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip"
+WINDOWS_STEAMCMD_URL = "https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip"
+LINUX_STEAMCMD_URL = "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz"
+IS_WINDOWS = os.name == "nt"
 DEFAULT_QUERY_PORT = 15637
 GITHUB_REPO = "Zataralee/Enshrouded-Server-Manager-by-Zat"
 RELEASE_PACKAGE_PREFIXES = ("ESM-Z-PythonRequired", "EnshroudedServerManager-PythonRequired")
+LINUX_RELEASE_PACKAGE_PREFIXES = ("ESM-Z-Linux",)
 SAVE_WORLD_RE = re.compile(r"^([0-9a-fA-F]{8,16})(?:$|[-_].*)")
 DEFAULT_SERVER_WORLD_ID = "3ad85aea"
 KNOWN_WORLD_IDS = [
@@ -268,6 +283,8 @@ def default_config():
         "start_on_manager_launch": False,
         "restart_check_interval_seconds": 5,
         "stop_timeout_seconds": 25,
+        "linux_runtime": "auto",
+        "linux_runtime_path": "",
         "server_root": str(ROOT / "Servers"),
         "backup_root": str(BACKUP_DIR),
         "min_backup_interval_minutes": 15,
@@ -396,6 +413,8 @@ def default_instance(name, path):
         "created_at": now_iso(),
         "save_imports": [],
         "pid": 0,
+        "process_group_id": 0,
+        "runtime": "windows-native" if IS_WINDOWS else "",
         "desired_running": False,
         "last_started_at": "",
         "last_stopped_at": "",
@@ -555,6 +574,155 @@ def safe_child(base, candidate):
     raise ValueError("Path escapes the allowed directory")
 
 
+def resolve_executable(value):
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    candidate = Path(raw).expanduser()
+    if candidate.is_file():
+        return candidate.resolve()
+    located = shutil.which(raw)
+    return Path(located).resolve() if located else None
+
+
+def steam_roots(home=None):
+    home = Path(home or Path.home())
+    candidates = [
+        home / ".steam" / "root",
+        home / ".steam" / "steam",
+        home / ".local" / "share" / "Steam",
+        home / ".var" / "app" / "com.valvesoftware.Steam" / "data" / "Steam",
+    ]
+    roots = []
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            resolved = candidate
+        if resolved.exists() and resolved not in roots:
+            roots.append(resolved)
+    return roots
+
+
+def steam_root_for_proton(proton_path):
+    for parent in Path(proton_path).resolve().parents:
+        if parent.name.lower() == "steamapps":
+            return parent.parent
+    roots = steam_roots()
+    return roots[0] if roots else Path.home() / ".steam" / "root"
+
+
+def discover_proton_executable(home=None):
+    override = resolve_executable(os.environ.get("ESMZ_PROTON"))
+    if override:
+        return override
+    candidates = []
+    for root in steam_roots(home):
+        for pattern in ("steamapps/common/Proton */proton", "compatibilitytools.d/*/proton"):
+            try:
+                candidates.extend(path for path in root.glob(pattern) if path.is_file())
+            except OSError:
+                continue
+    if not candidates:
+        return None
+
+    def sort_key(path):
+        try:
+            modified = path.stat().st_mtime
+        except OSError:
+            modified = 0
+        experimental = 1 if "experimental" in str(path).lower() else 0
+        return experimental, modified, str(path).lower()
+
+    return max(candidates, key=sort_key).resolve()
+
+
+def discover_wine_executable():
+    override = resolve_executable(os.environ.get("ESMZ_WINE"))
+    return override or resolve_executable("wine64") or resolve_executable("wine")
+
+
+def host_runtime_info(source_config=None):
+    if IS_WINDOWS:
+        return {
+            "host": "windows",
+            "experimental": False,
+            "requested": "windows-native",
+            "runtime": "windows-native",
+            "path": "",
+            "available": True,
+            "message": "Windows native server runtime",
+        }
+
+    cfg = source_config or {}
+    requested = str(os.environ.get("ESMZ_RUNTIME") or cfg.get("linux_runtime") or "auto").strip().lower()
+    if requested not in {"auto", "proton", "wine"}:
+        requested = "auto"
+    configured_path = resolve_executable(cfg.get("linux_runtime_path"))
+    configured_kind = None
+    if configured_path:
+        path_text = str(configured_path).lower()
+        configured_kind = "proton" if configured_path.name.lower() == "proton" or "proton" in path_text else "wine"
+
+    proton = discover_proton_executable()
+    wine = discover_wine_executable()
+    if configured_path and (requested == "auto" or requested == configured_kind):
+        selected_kind, selected_path = configured_kind, configured_path
+    else:
+        prefer_proton = bool(os.environ.get("ESMZ_PROTON"))
+        choices = [("proton", proton), ("wine", wine)] if prefer_proton else [("wine", wine), ("proton", proton)]
+        if requested != "auto":
+            choices = [item for item in choices if item[0] == requested]
+        selected_kind, selected_path = next((item for item in choices if item[1]), (requested, None))
+
+    if selected_path:
+        return {
+            "host": "linux",
+            "experimental": True,
+            "requested": requested,
+            "runtime": selected_kind,
+            "path": str(selected_path),
+            "available": True,
+            "message": f"Experimental {selected_kind.title()} runtime detected",
+        }
+    return {
+        "host": "linux",
+        "experimental": True,
+        "requested": requested,
+        "runtime": requested if requested != "auto" else "none",
+        "path": str(cfg.get("linux_runtime_path") or ""),
+        "available": False,
+        "message": "No Wine or Proton runtime was found. Install Wine, install Proton through Steam, or configure the runtime executable under Manager.",
+    }
+
+
+def linux_runtime_data_path(instance_id, runtime):
+    return DATA_DIR / "linux-runtime" / slugify(instance_id) / runtime
+
+
+def server_launch_spec(instance_id):
+    exe = instance_exe_path(instance_id)
+    if IS_WINDOWS:
+        return {"command": [str(exe)], "env": None, "runtime": "windows-native", "start_new_session": False}
+
+    runtime = host_runtime_info(config())
+    if not runtime["available"]:
+        raise RuntimeError(runtime["message"])
+    environment = os.environ.copy()
+    environment["WINEDEBUG"] = "-all"
+    runtime_path = runtime["path"]
+    data_path = linux_runtime_data_path(instance_id, runtime["runtime"])
+    data_path.mkdir(parents=True, exist_ok=True)
+    if runtime["runtime"] == "proton":
+        environment["STEAM_COMPAT_DATA_PATH"] = str(data_path)
+        environment["STEAM_COMPAT_CLIENT_INSTALL_PATH"] = str(steam_root_for_proton(runtime_path))
+        command = [runtime_path, "run", str(exe)]
+    else:
+        environment["WINEPREFIX"] = str(data_path)
+        command = [runtime_path, str(exe)]
+    return {"command": command, "env": environment, "runtime": runtime["runtime"], "start_new_session": True}
+
+
 def process_is_running(pid):
     try:
         pid = int(pid or 0)
@@ -575,11 +743,54 @@ def process_is_running(pid):
             return code.value == STILL_ACTIVE
         finally:
             ctypes.windll.kernel32.CloseHandle(handle)
+    proc_stat = Path(f"/proc/{pid}/stat")
+    if proc_stat.exists():
+        try:
+            fields = proc_stat.read_text(encoding="ascii", errors="replace").rsplit(") ", 1)[1].split()
+            return bool(fields and fields[0] != "Z")
+        except (OSError, IndexError):
+            pass
     try:
         os.kill(pid, 0)
         return True
     except OSError:
         return False
+
+
+def process_group_is_running(process_group_id):
+    if IS_WINDOWS:
+        return False
+    try:
+        process_group_id = int(process_group_id or 0)
+    except (TypeError, ValueError):
+        return False
+    if process_group_id <= 0:
+        return False
+    proc_root = Path("/proc")
+    if proc_root.is_dir():
+        try:
+            stat_files = proc_root.glob("[0-9]*/stat")
+            for stat_file in stat_files:
+                try:
+                    fields = stat_file.read_text(encoding="ascii", errors="replace").rsplit(") ", 1)[1].split()
+                    if len(fields) > 2 and fields[0] != "Z" and int(fields[2]) == process_group_id:
+                        return True
+                except (OSError, ValueError, IndexError):
+                    continue
+            return False
+        except OSError:
+            pass
+    try:
+        os.killpg(process_group_id, 0)
+        return True
+    except OSError:
+        return False
+
+
+def instance_process_is_running(inst):
+    if not IS_WINDOWS and process_group_is_running(inst.get("process_group_id")):
+        return True
+    return process_is_running(inst.get("pid"))
 
 
 def update_instance_metadata(instance_id, **patch):
@@ -593,14 +804,17 @@ def update_instance_metadata(instance_id, **patch):
     raise FileNotFoundError("Unknown server instance")
 
 
-def stop_process_tree(pid, timeout=8):
+def stop_process_tree(pid, timeout=8, process_group_id=0):
     try:
         pid = int(pid or 0)
     except (TypeError, ValueError):
         return None
-    if pid <= 0 or not process_is_running(pid):
+    group_running = process_group_is_running(process_group_id)
+    if pid <= 0 and not group_running:
         return None
-    if os.name == "nt":
+    if IS_WINDOWS:
+        if not process_is_running(pid):
+            return None
         subprocess.run(["taskkill", "/PID", str(pid), "/T"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         deadline = time.time() + max(1, min(int(timeout or 8), 10))
         while time.time() < deadline:
@@ -610,14 +824,26 @@ def stop_process_tree(pid, timeout=8):
         write_log(f"Graceful stop timed out for pid={pid}; forcing process tree stop")
         subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return 1
-    os.kill(pid, signal.SIGTERM)
+    try:
+        group_id = int(process_group_id or os.getpgid(pid))
+    except (OSError, TypeError, ValueError):
+        group_id = 0
+    if group_id and group_id == os.getpgrp():
+        raise RuntimeError("Refusing to signal the manager's own process group")
+    if group_id:
+        os.killpg(group_id, signal.SIGTERM)
+    else:
+        os.kill(pid, signal.SIGTERM)
     deadline = time.time() + max(1, int(timeout or 8))
     while time.time() < deadline:
-        if not process_is_running(pid):
+        if not process_group_is_running(group_id) and not process_is_running(pid):
             return 0
         time.sleep(0.25)
-    write_log(f"Graceful stop timed out for pid={pid}; killing process")
-    os.kill(pid, signal.SIGKILL)
+    write_log(f"Graceful stop timed out for pid={pid} group={group_id}; killing process group")
+    if group_id:
+        os.killpg(group_id, signal.SIGKILL)
+    else:
+        os.kill(pid, signal.SIGKILL)
     return 1
 
 
@@ -637,7 +863,7 @@ class ServerSupervisor:
             inst = get_instance(self.instance_id)
             tracked_pid = int(inst.get("pid") or 0)
             running = self.process is not None and self.process.poll() is None
-            external_running = False if running else process_is_running(tracked_pid)
+            external_running = False if running else instance_process_is_running(inst)
             pid = self.process.pid if running else (tracked_pid if external_running else None)
             started_at = self.started_at or inst.get("last_started_at")
             desired_running = bool(inst.get("desired_running", False))
@@ -659,7 +885,7 @@ class ServerSupervisor:
             if self.process is not None and self.process.poll() is None:
                 return
             inst = get_instance(self.instance_id)
-            if process_is_running(inst.get("pid")):
+            if instance_process_is_running(inst):
                 self.intentional_stop = False
                 self.activity = "idle"
                 update_instance_metadata(self.instance_id, desired_running=True)
@@ -681,18 +907,24 @@ class ServerSupervisor:
                 save_json(instance_config_path(self.instance_id), default_server_config(inst["name"], DEFAULT_QUERY_PORT))
                 write_log(f"Created initial enshrouded_server.json for {inst['name']}")
             validate_instance_can_start(self.instance_id)
-            creationflags = 0
-            if os.name == "nt":
+            launch = server_launch_spec(self.instance_id)
+            popen_options = {
+                "cwd": str(server_dir),
+                "stdin": subprocess.DEVNULL,
+                "stdout": subprocess.DEVNULL,
+                "stderr": subprocess.DEVNULL,
+            }
+            if IS_WINDOWS:
                 creationflags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
                 if hasattr(subprocess, "CREATE_BREAKAWAY_FROM_JOB"):
                     creationflags |= subprocess.CREATE_BREAKAWAY_FROM_JOB
+                popen_options["creationflags"] = creationflags
+            else:
+                popen_options["env"] = launch["env"]
+                popen_options["start_new_session"] = True
             self.process = subprocess.Popen(
-                [str(exe)],
-                cwd=str(server_dir),
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                creationflags=creationflags,
+                launch["command"],
+                **popen_options,
             )
             self._started_ts = time.time()
             self.started_at = now_iso()
@@ -701,6 +933,8 @@ class ServerSupervisor:
             update_instance_metadata(
                 self.instance_id,
                 pid=self.process.pid,
+                process_group_id=0 if IS_WINDOWS else self.process.pid,
+                runtime=launch["runtime"],
                 desired_running=True,
                 last_started_at=self.started_at,
                 last_exit_code=None,
@@ -712,9 +946,15 @@ class ServerSupervisor:
             if self.process is not None:
                 code = self.process.poll()
                 if code is not None:
+                    inst = get_instance(self.instance_id)
+                    if not IS_WINDOWS and process_group_is_running(inst.get("process_group_id")):
+                        self.process = None
+                        self.activity = "idle"
+                        write_log(f"Compatibility launcher exited for {inst['name']}; the Linux process group is still running")
+                        return
                     self.last_exit_code = code
                     self.process = None
-                    update_instance_metadata(self.instance_id, pid=0, desired_running=False, last_exit_code=code)
+                    update_instance_metadata(self.instance_id, pid=0, process_group_id=0, desired_running=False, last_exit_code=code)
                     signed = signed_exit_code(code)
                     hint = ""
                     if signed == -1:
@@ -734,34 +974,33 @@ class ServerSupervisor:
             timeout = int(config().get("stop_timeout_seconds", 25))
             inst = get_instance(self.instance_id)
             tracked_pid = int(inst.get("pid") or 0)
+            process_group_id = int(inst.get("process_group_id") or 0)
             update_instance_metadata(self.instance_id, desired_running=False)
             if proc is None or proc.poll() is not None:
-                if tracked_pid and process_is_running(tracked_pid):
-                    stop_process_tree(tracked_pid, timeout=timeout)
+                if instance_process_is_running(inst):
+                    stop_process_tree(tracked_pid, timeout=timeout, process_group_id=process_group_id)
                 self.process = None
-                update_instance_metadata(self.instance_id, pid=0, desired_running=False, last_stopped_at=now_iso())
+                update_instance_metadata(self.instance_id, pid=0, process_group_id=0, desired_running=False, last_stopped_at=now_iso())
                 return
             self.activity = "stopping"
         write_log("Stopping Enshrouded server by manager request")
-        if os.name == "nt":
+        if IS_WINDOWS:
             stop_process_tree(proc.pid, timeout=timeout)
             try:
                 proc.wait(timeout=2)
             except subprocess.TimeoutExpired:
                 pass
         else:
+            stop_process_tree(proc.pid, timeout=timeout, process_group_id=process_group_id or proc.pid)
             try:
-                proc.terminate()
-                proc.wait(timeout=timeout)
+                proc.wait(timeout=2)
             except subprocess.TimeoutExpired:
-                write_log("Stop timeout reached; killing Enshrouded server")
-                proc.kill()
-                proc.wait(timeout=10)
+                pass
         with self.lock:
             self.last_exit_code = proc.returncode
             self.process = None
             self.activity = "idle"
-            update_instance_metadata(self.instance_id, pid=0, desired_running=False, last_stopped_at=now_iso(), last_exit_code=proc.returncode)
+            update_instance_metadata(self.instance_id, pid=0, process_group_id=0, desired_running=False, last_stopped_at=now_iso(), last_exit_code=proc.returncode)
             notify_webhook_event("server.stopped", self.instance_id, message=f"{get_instance(self.instance_id)['name']} stopped.")
 
     def restart(self, update_first=False):
@@ -776,20 +1015,23 @@ class ServerSupervisor:
             proc = self.process
             desired_running = bool(inst.get("desired_running", False))
             if proc is None:
-                running = process_is_running(inst.get("pid"))
+                running = instance_process_is_running(inst)
                 should_start = desired_running and not running and not bool(inst.get("pid"))
                 crashed = bool(inst.get("pid")) and not running and desired_running
                 if crashed:
                     self.last_exit_code = inst.get("last_exit_code")
-                    update_instance_metadata(self.instance_id, pid=0)
+                    update_instance_metadata(self.instance_id, pid=0, process_group_id=0)
             else:
                 code = proc.poll()
-                crashed = code is not None
+                group_running = not IS_WINDOWS and process_group_is_running(inst.get("process_group_id"))
+                crashed = code is not None and not group_running
                 should_start = False
-                if crashed:
+                if code is not None and group_running:
+                    self.process = None
+                elif crashed:
                     self.last_exit_code = code
                     self.process = None
-                    update_instance_metadata(self.instance_id, pid=0, last_exit_code=code)
+                    update_instance_metadata(self.instance_id, pid=0, process_group_id=0, last_exit_code=code)
         if crashed:
             write_log(f"Enshrouded server exited with code {self.last_exit_code} ({signed_exit_code(self.last_exit_code)})")
             notify_webhook_event(
@@ -939,6 +1181,12 @@ def migrate_config(cfg):
     if "server_create_cooldown_minutes" not in cfg:
         cfg["server_create_cooldown_minutes"] = 0
         changed = True
+    if "linux_runtime" not in cfg:
+        cfg["linux_runtime"] = "auto"
+        changed = True
+    if "linux_runtime_path" not in cfg:
+        cfg["linux_runtime_path"] = ""
+        changed = True
     if "manager_updates" not in cfg:
         cfg["manager_updates"] = default_manager_updates()
         changed = True
@@ -1009,6 +1257,8 @@ def migrate_config(cfg):
             "created_at": now_iso(),
             "save_imports": [],
             "pid": 0,
+            "process_group_id": 0,
+            "runtime": "windows-native" if IS_WINDOWS else "",
             "desired_running": False,
             "last_started_at": "",
             "last_stopped_at": "",
@@ -1328,6 +1578,7 @@ def public_config(user=None):
     cfg["setup_required"] = len(cfg["instances"]) == 0
     cfg["used_query_ports"] = sorted({instance_query_port(inst["id"]) for inst in instances()})
     cfg["app_version"] = APP_VERSION
+    cfg["host_runtime"] = host_runtime_info(cfg)
     cfg["update_log"] = UPDATE_LOG
     cfg["webhook_events"] = WEBHOOK_EVENTS
     cfg["default_webhook_events"] = DEFAULT_WEBHOOK_EVENTS
@@ -1358,6 +1609,13 @@ def update_config(patch):
         ]:
             if key in patch:
                 cfg[key] = patch[key]
+        if "linux_runtime" in patch:
+            runtime = str(patch["linux_runtime"] or "auto").strip().lower()
+            if runtime not in {"auto", "proton", "wine"}:
+                raise ValueError("Linux runtime must be auto, proton, or wine")
+            cfg["linux_runtime"] = runtime
+        if "linux_runtime_path" in patch:
+            cfg["linux_runtime_path"] = str(patch["linux_runtime_path"] or "").strip()
         for key in ["server_root", "backup_root"]:
             if key in patch and str(patch[key]).strip():
                 cfg[key] = str(Path(str(patch[key]).strip()))
@@ -2109,7 +2367,20 @@ def redeem_invite_code(body):
 
 
 def steamcmd_path():
-    return ROOT / "Steamcmd" / "steamcmd.exe"
+    name = "steamcmd.exe" if IS_WINDOWS else "steamcmd.sh"
+    return ROOT / "Steamcmd" / name
+
+
+def safe_extract_tar(archive_path, destination):
+    destination = Path(destination).resolve()
+    destination.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(archive_path, "r:gz") as archive:
+        members = archive.getmembers()
+        for member in members:
+            if not (member.isfile() or member.isdir()):
+                raise ValueError(f"Archive contains an unsupported entry: {member.name}")
+            safe_child(destination, destination / member.name)
+        archive.extractall(destination, members=members)
 
 
 def ensure_steamcmd(status=None):
@@ -2120,23 +2391,32 @@ def ensure_steamcmd(status=None):
         return exe
     target = exe.parent
     target.mkdir(parents=True, exist_ok=True)
-    archive = DATA_DIR / "steamcmd.zip"
-    write_log(f"Downloading SteamCMD from {STEAMCMD_URL}")
+    archive = DATA_DIR / ("steamcmd.zip" if IS_WINDOWS else "steamcmd_linux.tar.gz")
+    download_url = WINDOWS_STEAMCMD_URL if IS_WINDOWS else LINUX_STEAMCMD_URL
+    write_log(f"Downloading SteamCMD from {download_url}")
     if status:
         status("Downloading SteamCMD")
-    urllib.request.urlretrieve(STEAMCMD_URL, archive)
+    urllib.request.urlretrieve(download_url, archive)
     if status:
         status("Extracting SteamCMD")
-    with zipfile.ZipFile(archive, "r") as zf:
-        zf.extractall(target)
+    if IS_WINDOWS:
+        with zipfile.ZipFile(archive, "r") as zf:
+            zf.extractall(target)
+    else:
+        safe_extract_tar(archive, target)
+        exe.chmod(exe.stat().st_mode | 0o111)
     archive.unlink(missing_ok=True)
     if not exe.exists():
-        raise FileNotFoundError("SteamCMD download completed, but steamcmd.exe was not found")
+        raise FileNotFoundError(f"SteamCMD download completed, but {exe.name} was not found")
     write_log(f"Installed SteamCMD to {target}")
     return exe
 
 
 def install_instance(name, install_dir=None, query_port=None, status=None, owner_user_id="", folder_name=None):
+    if not IS_WINDOWS:
+        runtime = host_runtime_info(config())
+        if not runtime["available"]:
+            raise RuntimeError(runtime["message"])
     target = Path(install_dir) if install_dir else managed_install_path(folder_name or name)
     target.mkdir(parents=True, exist_ok=True)
     if status:
@@ -2186,13 +2466,17 @@ def save_server_config(server_config, instance_id=None, restart_if_running=False
 
 def version_parts(version):
     cleaned = str(version or "").strip().lstrip("vV")
+    base, separator, prerelease = cleaned.partition("-")
     parts = []
-    for chunk in cleaned.split("."):
-        digits = "".join(ch for ch in chunk if ch.isdigit())
-        parts.append(int(digits or 0))
+    for chunk in base.split(".")[:3]:
+        match = re.match(r"\d+", chunk)
+        parts.append(int(match.group(0)) if match else 0)
     while len(parts) < 3:
         parts.append(0)
-    return tuple(parts[:3])
+    prerelease_numbers = [int(value) for value in re.findall(r"\d+", prerelease)]
+    stable_rank = 1 if not separator else 0
+    prerelease_revision = prerelease_numbers[-1] if prerelease_numbers else 0
+    return tuple(parts + [stable_rank, prerelease_revision])
 
 
 def public_manager_updates(source=None):
@@ -2258,14 +2542,27 @@ def github_json(url, token=""):
         return json.loads(response.read().decode("utf-8"))
 
 
-def find_release_asset(release):
+def find_release_asset(release, platform_name=None):
     assets = release.get("assets", [])
-    for prefix in RELEASE_PACKAGE_PREFIXES:
+    platform_name = platform_name or ("windows" if IS_WINDOWS else "linux")
+    prefixes = RELEASE_PACKAGE_PREFIXES if platform_name == "windows" else LINUX_RELEASE_PACKAGE_PREFIXES
+    suffix = ".zip" if platform_name == "windows" else ".tar.gz"
+    for prefix in prefixes:
         for asset in assets:
             name = asset.get("name", "")
-            if name.startswith(prefix) and name.endswith(".zip"):
+            if name.startswith(prefix) and name.endswith(suffix):
                 return asset
     return None
+
+
+def latest_release_for_host(repo, token=""):
+    if IS_WINDOWS:
+        return github_json(f"https://api.github.com/repos/{repo}/releases/latest", token=token)
+    releases = github_json(f"https://api.github.com/repos/{repo}/releases?per_page=20", token=token)
+    for release in releases if isinstance(releases, list) else []:
+        if not release.get("draft") and find_release_asset(release, platform_name="linux"):
+            return release
+    return github_json(f"https://api.github.com/repos/{repo}/releases/latest", token=token)
 
 
 def manager_updates_config():
@@ -2289,7 +2586,7 @@ def check_manager_updates(force=False):
         repo = str(updates.get("repo") or GITHUB_REPO).strip()
         token = str(updates.get("github_token") or "").strip()
     try:
-        release = github_json(f"https://api.github.com/repos/{repo}/releases/latest", token=token)
+        release = latest_release_for_host(repo, token=token)
         tag = str(release.get("tag_name") or "").lstrip("v")
         asset = find_release_asset(release)
         release_state = manager_release_state(tag, bool(asset))
@@ -2334,10 +2631,10 @@ def install_manager_update():
         raise RuntimeError("No manager update is currently available")
     repo = str(updates.get("repo") or GITHUB_REPO).strip()
     token = str(updates.get("github_token") or "").strip()
-    release = github_json(f"https://api.github.com/repos/{repo}/releases/latest", token=token)
+    release = latest_release_for_host(repo, token=token)
     asset = find_release_asset(release)
     if not asset:
-        raise RuntimeError("Latest GitHub release does not include a Python-required zip asset")
+        raise RuntimeError("Latest GitHub release does not include a compatible manager package for this host")
     package_dir = DATA_DIR / "manager_updates"
     package_dir.mkdir(parents=True, exist_ok=True)
     target_zip = package_dir / asset["name"]
@@ -2349,9 +2646,16 @@ def install_manager_update():
         if APP_DIR.exists():
             shutil.copytree(APP_DIR, backup_dir / "enshrouded_manager", ignore=shutil.ignore_patterns("data", "__pycache__"))
         shutil.rmtree(package_dir / "extract", ignore_errors=True)
-        with zipfile.ZipFile(target_zip, "r") as zf:
-            zf.extractall(package_dir / "extract")
+        if target_zip.name.endswith(".tar.gz"):
+            safe_extract_tar(target_zip, package_dir / "extract")
+        else:
+            with zipfile.ZipFile(target_zip, "r") as zf:
+                zf.extractall(package_dir / "extract")
         extracted_manager = package_dir / "extract" / "enshrouded_manager"
+        if not extracted_manager.exists():
+            nested_managers = list((package_dir / "extract").glob("*/enshrouded_manager"))
+            if len(nested_managers) == 1:
+                extracted_manager = nested_managers[0]
         if not extracted_manager.exists():
             raise RuntimeError("Downloaded update package does not contain enshrouded_manager")
         for item in extracted_manager.iterdir():
@@ -2483,6 +2787,20 @@ def test_webhook(instance_id, webhook_id):
     return [{"server_id": inst.get("id", ""), "webhook_id": webhook.get("id", ""), "status": status}]
 
 
+def steamcmd_update_command(exe, target_dir):
+    command = [
+        str(exe),
+        "+force_install_dir",
+        str(target_dir),
+        "+login",
+        "anonymous",
+    ]
+    if not IS_WINDOWS:
+        command.extend(["+@sSteamCmdForcePlatformType", "windows"])
+    command.extend(["+app_update", APP_ID, "validate", "+quit"])
+    return command
+
+
 def run_update(instance_id=None, status=None):
     exe = ensure_steamcmd(status=status)
     target_dir = instance_path(instance_id)
@@ -2490,17 +2808,7 @@ def run_update(instance_id=None, status=None):
     if status:
         status("Installing/updating Enshrouded Dedicated Server with SteamCMD")
     subprocess.run(
-        [
-            str(exe),
-            "+force_install_dir",
-            str(target_dir),
-            "+login",
-            "anonymous",
-            "+app_update",
-            APP_ID,
-            "validate",
-            "+quit",
-        ],
+        steamcmd_update_command(exe, target_dir),
         cwd=str(exe.parent),
         check=True,
     )
@@ -2886,13 +3194,17 @@ def known_save_roots():
         value = env.get(key)
         if value:
             roots.append(Path(value))
-    roots.extend([
-        Path.home(),
-        Path("C:/Program Files (x86)/Steam/userdata"),
-        Path("C:/Program Files/Steam/userdata"),
-    ])
+    roots.append(Path.home())
+    if IS_WINDOWS:
+        roots.extend([
+            Path("C:/Program Files (x86)/Steam/userdata"),
+            Path("C:/Program Files/Steam/userdata"),
+        ])
+    else:
+        for root in steam_roots():
+            roots.extend([root, root / "userdata"])
     users_dir = Path("C:/Users")
-    if users_dir.exists():
+    if IS_WINDOWS and users_dir.exists():
         try:
             user_dirs = list(users_dir.iterdir())
         except OSError:
@@ -3538,8 +3850,8 @@ def main():
             supervisor(inst["id"]).intentional_stop = False
             update_instance_metadata(inst["id"], desired_running=True)
     threading.Thread(target=monitor_loop, daemon=True).start()
-    host = cfg.get("bind_host", "0.0.0.0")
-    port = int(cfg.get("port", 8080))
+    host = os.environ.get("ESMZ_BIND_HOST") or cfg.get("bind_host", "0.0.0.0")
+    port = int(os.environ.get("ESMZ_PORT") or cfg.get("port", 8080))
     write_log(f"ESM-Z UI listening on http://{host}:{port}")
     ThreadingHTTPServer((host, port), Handler).serve_forever()
 

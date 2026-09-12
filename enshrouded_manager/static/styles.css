@@ -284,6 +284,23 @@ dd { margin: 0; }
 .update-check-panel small.error {
   color: var(--danger);
 }
+
+.runtime-status {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+}
+
+.runtime-status strong.available {
+  color: var(--accent-2);
+}
+
+.runtime-status strong.missing {
+  color: var(--danger);
+}
 .update-facts {
   grid-template-columns: max-content minmax(0, 1fr);
   margin: 4px 0;

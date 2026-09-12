@@ -18,6 +18,19 @@ Changes:
 - Clarified installed versus published update versions and corrected misleading up-to-date results for manually updated files.
 - Moved optional private/custom GitHub credentials into collapsed advanced settings and masked them in manual update API responses.
 
+## Experimental Prerelease
+
+**v0.10.0-linux-alpha.1** - 2026-09-11
+
+- Added an experimental Linux host path using Wine or Proton.
+- Added automatic Proton discovery for standard Steam and Flatpak Steam locations.
+- Added Linux SteamCMD download and Windows depot selection for app `2278520`.
+- Added isolated compatibility data and process groups per server instance.
+- Added Linux local-save discovery roots and platform-specific updater asset selection.
+- Added Linux runtime status and selection under Manager settings.
+- Added a Linux installation and test guide.
+- This prerelease does not provide systemd services and is not production Linux support.
+
 ## Version History
 
 ### v0.9.0 - 2026-09-08
