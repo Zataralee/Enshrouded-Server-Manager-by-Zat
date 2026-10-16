@@ -6,7 +6,7 @@ The stable release supports Windows hosts. Experimental Linux compatibility work
 
 Current release: **v0.9.1**
 
-Experimental prerelease: **v0.10.0-linux-alpha.2**
+Experimental prerelease: **v0.10.0-linux-alpha.3**
 
 Shareable package: [`release/ESM-Z-PythonRequired-v0.9.1.zip`](release/ESM-Z-PythonRequired-v0.9.1.zip)
 
@@ -26,7 +26,7 @@ Shareable package: [`release/ESM-Z-PythonRequired-v0.9.1.zip`](release/ESM-Z-Pyt
 - Imports local player worlds into a dedicated server workflow.
 - Creates local backups and optional FTP backups.
 - Supports multiple Discord or generic JSON webhooks per server for server and manager update events.
-- Checks GitHub releases for ESM-Z updates on an admin-configured interval.
+- Checks GitHub releases for ESM-Z updates on an admin-configured interval, displays an admin notice, and installs an update only after an admin approves it.
 - Includes an in-app Instructions tab and Updates tab.
 
 ## Quick Install

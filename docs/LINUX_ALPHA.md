@@ -1,6 +1,6 @@
 # Linux Alpha Test Guide
 
-This guide is for the experimental `v0.10.0-linux-alpha.2` branch. It is not a production Linux release. Keen Games currently supports the Enshrouded dedicated server on Windows only, so ESM-Z uses Wine or Proton to run the Windows server build.
+This guide is for the experimental `v0.10.0-linux-alpha.3` branch. It is not a production Linux release. Keen Games currently supports the Enshrouded dedicated server on Windows only, so ESM-Z uses Wine or Proton to run the Windows server build.
 
 ## Before You Start
 
@@ -13,18 +13,18 @@ ESM-Z stores SteamCMD, compatibility data, and server files inside its own extra
 
 ## Install The Test Build
 
-1. Download `ESM-Z-Linux-PythonRequired-v0.10.0-linux-alpha.2.tar.gz` and its matching `.sha256` file from the prerelease.
+1. Download `ESM-Z-Linux-PythonRequired-v0.10.0-linux-alpha.3.tar.gz` and its matching `.sha256` file from the prerelease.
 2. Open a terminal in the download directory and verify the package:
 
 ```bash
-sha256sum -c ESM-Z-Linux-PythonRequired-v0.10.0-linux-alpha.2.tar.gz.sha256
+sha256sum -c ESM-Z-Linux-PythonRequired-v0.10.0-linux-alpha.3.tar.gz.sha256
 ```
 
 3. Extract the package and enter its folder:
 
 ```bash
-tar -xzf ESM-Z-Linux-PythonRequired-v0.10.0-linux-alpha.2.tar.gz
-cd ESM-Z-Linux-PythonRequired-v0.10.0-linux-alpha.2
+tar -xzf ESM-Z-Linux-PythonRequired-v0.10.0-linux-alpha.3.tar.gz
+cd ESM-Z-Linux-PythonRequired-v0.10.0-linux-alpha.3
 ```
 
 4. Start the manager:

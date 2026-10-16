@@ -18,6 +18,6 @@ The package includes install notes, user instructions, feature notes, release no
 
 ## Experimental Linux Test
 
-`ESM-Z-Linux-PythonRequired-v0.10.0-linux-alpha.2.tar.gz` is an unsupported test build for Linux hosts. Follow `docs/LINUX_ALPHA.md`; do not use it for production hosting or important worlds without a separate backup.
+`ESM-Z-Linux-PythonRequired-v0.10.0-linux-alpha.3.tar.gz` is an unsupported test build for Linux hosts. Follow `docs/LINUX_ALPHA.md`; do not use it for production hosting or important worlds without a separate backup.
 
-`ESM-Z-PythonRequired-v0.10.0-linux-alpha.2.zip` contains the same alpha manager fixes for Windows test hosts that already have Python 3.11 or newer installed.
+`ESM-Z-PythonRequired-v0.10.0-linux-alpha.3.zip` contains the same alpha manager fixes for Windows test hosts that already have Python 3.11 or newer installed.

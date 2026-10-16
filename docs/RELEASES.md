@@ -20,6 +20,14 @@ Changes:
 
 ## Experimental Prerelease
 
+**v0.10.0-linux-alpha.3** - 2026-10-16
+
+- Added an admin update notice and explicit Download & Install action.
+- Removed automatic manager update installation; background checks are notification-only.
+- Added stable/prerelease release-channel selection that follows the installed build by default.
+- Added optional SHA-256 verification, package version validation, backup, and rollback protection.
+- Added an installed-pending-restart state and kept running game servers independent from the manager restart.
+
 **v0.10.0-linux-alpha.2** - 2026-10-16
 
 - Prevented a failed update-before-start operation from retrying every monitor cycle.

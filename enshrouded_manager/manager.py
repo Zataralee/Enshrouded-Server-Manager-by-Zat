@@ -27,8 +27,19 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 
-APP_VERSION = "0.10.0-linux-alpha.2"
+APP_VERSION = "0.10.0-linux-alpha.3"
 UPDATE_LOG = [
+    {
+        "version": "0.10.0-linux-alpha.3",
+        "date": "2026-10-16",
+        "changes": [
+            "Added a visible admin notice when a compatible ESM-Z update is available.",
+            "Made manager updates manual-only and removed the automatic-install setting.",
+            "Added release channels so prerelease installs can discover newer test releases without exposing prereleases to stable installs.",
+            "Added checksum verification, package validation, backup, and rollback protection to self-updates.",
+            "Added an installed-pending-restart state so the UI does not claim the running process is already updated.",
+        ],
+    },
     {
         "version": "0.10.0-linux-alpha.2",
         "date": "2026-10-16",
@@ -376,8 +387,8 @@ def default_manager_updates():
         "enabled": True,
         "repo": GITHUB_REPO,
         "interval_hours": 24,
+        "channel": "auto",
         "github_token": "",
-        "auto_install": False,
         "last_checked_at": "",
         "latest_version": "",
         "latest_url": "",
@@ -387,6 +398,9 @@ def default_manager_updates():
         "latest_published_at": "",
         "last_error": "",
         "last_installed_at": "",
+        "installed_pending_version": "",
+        "restart_required": False,
+        "checksum_verified": False,
     }
 
 
@@ -1251,11 +1265,19 @@ def migrate_config(cfg):
         cfg["manager_updates"] = default_manager_updates()
         changed = True
     else:
+        if "auto_install" in cfg["manager_updates"]:
+            cfg["manager_updates"].pop("auto_install", None)
+            changed = True
         defaults = default_manager_updates()
         for key, value in defaults.items():
             if key not in cfg["manager_updates"]:
                 cfg["manager_updates"][key] = value
                 changed = True
+        pending_version = str(cfg["manager_updates"].get("installed_pending_version") or "")
+        if pending_version and version_parts(pending_version) <= version_parts(APP_VERSION):
+            cfg["manager_updates"]["installed_pending_version"] = ""
+            cfg["manager_updates"]["restart_required"] = False
+            changed = True
     if "removed_instances" not in cfg:
         cfg["removed_instances"] = []
         changed = True
@@ -1720,9 +1742,15 @@ def update_config(patch):
         if "manager_updates" in patch:
             updates = dict(cfg.get("manager_updates", default_manager_updates()))
             incoming = patch["manager_updates"]
-            for key in ["enabled", "repo", "auto_install"]:
+            for key in ["enabled", "repo"]:
                 if key in incoming:
                     updates[key] = incoming[key]
+            if "channel" in incoming:
+                channel = str(incoming.get("channel") or "auto").strip().lower()
+                if channel not in {"auto", "stable", "prerelease"}:
+                    raise ValueError("Manager update channel must be auto, stable, or prerelease")
+                updates["channel"] = channel
+            updates.pop("auto_install", None)
             if "interval_hours" in incoming:
                 interval = int(incoming.get("interval_hours") or 24)
                 if interval < 1:
@@ -2444,6 +2472,15 @@ def safe_extract_tar(archive_path, destination):
         archive.extractall(destination, members=members)
 
 
+def safe_extract_zip(archive_path, destination):
+    destination = Path(destination).resolve()
+    destination.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(archive_path, "r") as archive:
+        for member in archive.infolist():
+            safe_child(destination, destination / member.filename)
+        archive.extractall(destination)
+
+
 def ensure_steamcmd(status=None):
     exe = steamcmd_path()
     if exe.exists():
@@ -2461,8 +2498,7 @@ def ensure_steamcmd(status=None):
     if status:
         status("Extracting SteamCMD")
     if IS_WINDOWS:
-        with zipfile.ZipFile(archive, "r") as zf:
-            zf.extractall(target)
+        safe_extract_zip(archive, target)
     else:
         safe_extract_tar(archive, target)
         exe.chmod(exe.stat().st_mode | 0o111)
@@ -2546,8 +2582,12 @@ def public_manager_updates(source=None):
     if token_saved:
         updates["github_token"] = "********"
     package_available = bool(updates.get("package_available", False))
+    pending_version = str(updates.get("installed_pending_version") or "")
+    pending_restart = bool(updates.get("restart_required") and pending_version)
     if updates.get("last_error"):
         release_state = "error"
+    elif pending_restart and version_parts(pending_version) > version_parts(APP_VERSION):
+        release_state = "installed_pending_restart"
     else:
         release_state = manager_release_state(updates.get("latest_version", ""), package_available)
     updates.update({
@@ -2616,14 +2656,30 @@ def find_release_asset(release, platform_name=None):
     return None
 
 
-def latest_release_for_host(repo, token=""):
-    if IS_WINDOWS:
-        return github_json(f"https://api.github.com/repos/{repo}/releases/latest", token=token)
-    releases = github_json(f"https://api.github.com/repos/{repo}/releases?per_page=20", token=token)
+def release_is_prerelease(release):
+    tag = str(release.get("tag_name") or "").strip().lstrip("vV")
+    return bool(release.get("prerelease")) or "-" in tag
+
+
+def latest_release_for_host(repo, token="", channel="auto", current_version=APP_VERSION, platform_name=None):
+    channel = str(channel or "auto").strip().lower()
+    include_prereleases = channel == "prerelease" or (channel == "auto" and "-" in str(current_version))
+    releases = github_json(f"https://api.github.com/repos/{repo}/releases?per_page=50", token=token)
+    candidates = []
     for release in releases if isinstance(releases, list) else []:
-        if not release.get("draft") and find_release_asset(release, platform_name="linux"):
-            return release
-    return github_json(f"https://api.github.com/repos/{repo}/releases/latest", token=token)
+        if release.get("draft") or not release.get("tag_name"):
+            continue
+        if release_is_prerelease(release) and not include_prereleases:
+            continue
+        candidates.append(release)
+    if not candidates:
+        raise RuntimeError("No published GitHub release matches the selected update channel")
+    return max(candidates, key=lambda item: version_parts(item.get("tag_name", "")))
+
+
+def find_checksum_asset(release, package_asset):
+    expected_name = f"{package_asset.get('name', '')}.sha256"
+    return next((asset for asset in release.get("assets", []) if asset.get("name") == expected_name), None)
 
 
 def manager_updates_config():
@@ -2646,8 +2702,9 @@ def check_manager_updates(force=False):
                 pass
         repo = str(updates.get("repo") or GITHUB_REPO).strip()
         token = str(updates.get("github_token") or "").strip()
+        channel = str(updates.get("channel") or "auto").strip()
     try:
-        release = latest_release_for_host(repo, token=token)
+        release = latest_release_for_host(repo, token=token, channel=channel)
         tag = str(release.get("tag_name") or "").lstrip("v")
         asset = find_release_asset(release)
         release_state = manager_release_state(tag, bool(asset))
@@ -2657,6 +2714,14 @@ def check_manager_updates(force=False):
             cfg = config()
             updates = cfg.setdefault("manager_updates", default_manager_updates())
             was_available = bool(updates.get("update_available", False))
+            pending_restart = bool(
+                updates.get("restart_required")
+                and str(updates.get("installed_pending_version") or "") == tag
+                and version_parts(tag) > version_parts(APP_VERSION)
+            )
+            if pending_restart:
+                release_state = "installed_pending_restart"
+                update_available = False
             updates.update({
                 "last_checked_at": now_iso(),
                 "latest_version": tag,
@@ -2674,8 +2739,6 @@ def check_manager_updates(force=False):
                 message=f"ESM-Z v{tag} is available. Current version is v{APP_VERSION}.",
                 details={"latest_version": tag, "current_version": APP_VERSION, "url": latest_url},
             )
-        if update_available and manager_updates_config().get("auto_install") and asset:
-            install_manager_update()
         return dict(manager_updates_config())
     except Exception as exc:
         with CONFIG_LOCK:
@@ -2686,67 +2749,131 @@ def check_manager_updates(force=False):
             return dict(updates)
 
 
+def download_github_asset(asset, destination, token=""):
+    req = urllib.request.Request(asset["browser_download_url"], headers=github_headers(token))
+    with urlopen_https(req, timeout=60) as response, Path(destination).open("wb") as fh:
+        shutil.copyfileobj(response, fh)
+
+
+def verify_release_checksum(release, package_asset, package_path, token=""):
+    checksum_asset = find_checksum_asset(release, package_asset)
+    if not checksum_asset:
+        return False
+    req = urllib.request.Request(checksum_asset["browser_download_url"], headers=github_headers(token))
+    with urlopen_https(req, timeout=20) as response:
+        checksum_text = response.read().decode("ascii", errors="strict").strip()
+    expected = checksum_text.split()[0].lower() if checksum_text else ""
+    if not re.fullmatch(r"[0-9a-f]{64}", expected):
+        raise RuntimeError("The release checksum file is not valid")
+    actual = hashlib.sha256(Path(package_path).read_bytes()).hexdigest()
+    if not hmac.compare_digest(actual, expected):
+        raise RuntimeError("The downloaded update package failed SHA-256 verification")
+    return True
+
+
+def packaged_manager_version(manager_dir):
+    manager_file = Path(manager_dir) / "manager.py"
+    if not manager_file.is_file() or not (Path(manager_dir) / "static" / "index.html").is_file():
+        raise RuntimeError("Downloaded update package is missing required ESM-Z files")
+    match = re.search(r'^APP_VERSION = "([^"]+)"', manager_file.read_text(encoding="utf-8"), re.MULTILINE)
+    if not match:
+        raise RuntimeError("Downloaded update package does not declare an ESM-Z version")
+    return match.group(1)
+
+
+def replace_manager_files(source_dir, destination_dir):
+    source_dir = Path(source_dir)
+    destination_dir = Path(destination_dir)
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    for item in destination_dir.iterdir():
+        if item.name == "data":
+            continue
+        if item.is_dir():
+            shutil.rmtree(item)
+        else:
+            item.unlink()
+    for item in source_dir.iterdir():
+        if item.name in {"data", "__pycache__"}:
+            continue
+        destination = destination_dir / item.name
+        if item.is_dir():
+            shutil.copytree(item, destination)
+        else:
+            shutil.copy2(item, destination)
+
+
 def install_manager_update():
     updates = manager_updates_config()
+    if updates.get("restart_required"):
+        raise RuntimeError("An ESM-Z update is already installed. Restart the manager before installing another update.")
     if not updates.get("update_available"):
         raise RuntimeError("No manager update is currently available")
     repo = str(updates.get("repo") or GITHUB_REPO).strip()
     token = str(updates.get("github_token") or "").strip()
-    release = latest_release_for_host(repo, token=token)
+    channel = str(updates.get("channel") or "auto").strip()
+    release = latest_release_for_host(repo, token=token, channel=channel)
+    release_version = str(release.get("tag_name") or "").lstrip("v")
+    if not is_newer_version(release_version):
+        raise RuntimeError("The selected GitHub release is not newer than the running ESM-Z version")
     asset = find_release_asset(release)
     if not asset:
         raise RuntimeError("Latest GitHub release does not include a compatible manager package for this host")
     package_dir = DATA_DIR / "manager_updates"
     package_dir.mkdir(parents=True, exist_ok=True)
-    target_zip = package_dir / asset["name"]
-    req = urllib.request.Request(asset["browser_download_url"], headers=github_headers(token))
+    package_path = package_dir / asset["name"]
+    extract_dir = package_dir / "extract"
+    backup_dir = package_dir / f"before-{APP_VERSION}-{dt.datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    backup_manager = backup_dir / "enshrouded_manager"
+    replacement_started = False
     try:
-        with urlopen_https(req, timeout=60) as response, target_zip.open("wb") as fh:
-            shutil.copyfileobj(response, fh)
-        backup_dir = package_dir / f"before-{APP_VERSION}-{dt.datetime.now().strftime('%Y%m%d-%H%M%S')}"
-        if APP_DIR.exists():
-            shutil.copytree(APP_DIR, backup_dir / "enshrouded_manager", ignore=shutil.ignore_patterns("data", "__pycache__"))
-        shutil.rmtree(package_dir / "extract", ignore_errors=True)
-        if target_zip.name.endswith(".tar.gz"):
-            safe_extract_tar(target_zip, package_dir / "extract")
+        download_github_asset(asset, package_path, token=token)
+        checksum_verified = verify_release_checksum(release, asset, package_path, token=token)
+        shutil.rmtree(extract_dir, ignore_errors=True)
+        if package_path.name.endswith(".tar.gz"):
+            safe_extract_tar(package_path, extract_dir)
         else:
-            with zipfile.ZipFile(target_zip, "r") as zf:
-                zf.extractall(package_dir / "extract")
-        extracted_manager = package_dir / "extract" / "enshrouded_manager"
+            safe_extract_zip(package_path, extract_dir)
+        extracted_manager = extract_dir / "enshrouded_manager"
         if not extracted_manager.exists():
-            nested_managers = list((package_dir / "extract").glob("*/enshrouded_manager"))
+            nested_managers = list(extract_dir.glob("*/enshrouded_manager"))
             if len(nested_managers) == 1:
                 extracted_manager = nested_managers[0]
         if not extracted_manager.exists():
             raise RuntimeError("Downloaded update package does not contain enshrouded_manager")
-        for item in extracted_manager.iterdir():
-            if item.name in {"data", "__pycache__"}:
-                continue
-            dest = APP_DIR / item.name
-            if dest.exists():
-                if dest.is_dir():
-                    shutil.rmtree(dest)
-                else:
-                    dest.unlink()
-            if item.is_dir():
-                shutil.copytree(item, dest)
-            else:
-                shutil.copy2(item, dest)
-        shutil.rmtree(package_dir / "extract", ignore_errors=True)
+        package_version = packaged_manager_version(extracted_manager)
+        if package_version != release_version:
+            raise RuntimeError(f"Update package version v{package_version} does not match release v{release_version}")
+        if APP_DIR.exists():
+            shutil.copytree(APP_DIR, backup_manager, ignore=shutil.ignore_patterns("data", "__pycache__"))
+        replacement_started = True
+        replace_manager_files(extracted_manager, APP_DIR)
         with CONFIG_LOCK:
             cfg = config()
             updates = cfg.setdefault("manager_updates", default_manager_updates())
-            updates["last_installed_at"] = now_iso()
-            updates["last_error"] = ""
+            updates.update({
+                "last_installed_at": now_iso(),
+                "last_error": "",
+                "installed_pending_version": release_version,
+                "restart_required": True,
+                "checksum_verified": checksum_verified,
+                "update_available": False,
+                "release_state": "installed_pending_restart",
+            })
             save_json(MANAGER_CONFIG, cfg)
         notify_webhook_event(
             "manager.update.installed",
-            message=f"Manager update package v{str(release.get('tag_name') or '').lstrip('v')} was installed. Restart the manager to run the new version.",
-            details={"latest_version": str(release.get("tag_name") or "").lstrip("v")},
+            message=f"Manager update package v{release_version} was installed. Restart the manager to run the new version.",
+            details={"latest_version": release_version, "checksum_verified": checksum_verified},
         )
-        write_log("Manager update package installed; restart the manager to run the new version")
+        write_log(f"Manager update package v{release_version} installed; restart the manager to finish the update")
         return dict(manager_updates_config())
     except Exception as exc:
+        if replacement_started and backup_manager.exists():
+            try:
+                replace_manager_files(backup_manager, APP_DIR)
+                write_log("Manager update failed after replacement began; restored the previous manager files")
+            except Exception as rollback_exc:
+                write_log(f"Manager update rollback also failed: {rollback_exc}")
         with CONFIG_LOCK:
             cfg = config()
             updates = cfg.setdefault("manager_updates", default_manager_updates())
@@ -2754,6 +2881,8 @@ def install_manager_update():
             save_json(MANAGER_CONFIG, cfg)
         notify_webhook_event("manager.update.failed", message=f"Manager update failed: {exc}", details={"error": str(exc)})
         raise
+    finally:
+        shutil.rmtree(extract_dir, ignore_errors=True)
 
 
 def webhook_targets(event, instance_id=None):

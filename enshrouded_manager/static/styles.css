@@ -50,6 +50,22 @@ nav {
   display: flex;
   gap: 6px;
 }
+.manager-update-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--accent);
+  background: #29271d;
+}
+.manager-update-banner > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+.manager-update-banner strong { color: var(--accent); }
+.manager-update-banner small { color: var(--muted); }
+.manager-update-banner .actions { margin: 0; }
 button {
   min-height: 36px;
   border: 1px solid var(--line);
@@ -494,7 +510,8 @@ pre {
 
 @media (max-width: 860px) {
   header { align-items: flex-start; flex-direction: column; }
-.grid.two, .grid.three, .logs-grid, .form-grid, .group, .ban, .instance-row, .duration-row, .port-entry, .save-row { grid-template-columns: 1fr; }
-  main > section, header, nav, .sub-nav { padding-left: 14px; padding-right: 14px; }
+  .manager-update-banner { align-items: flex-start; flex-direction: column; }
+  .grid.two, .grid.three, .logs-grid, .form-grid, .group, .ban, .instance-row, .duration-row, .port-entry, .save-row { grid-template-columns: 1fr; }
+  main > section, header, nav, .sub-nav, .manager-update-banner { padding-left: 14px; padding-right: 14px; }
   dl, .update-facts { grid-template-columns: 1fr; }
 }
