@@ -276,6 +276,7 @@ function renderStatus() {
     <dt>Last stopped</dt><dd>${s.last_stopped_at || "None"}</dd>
     <dt>Uptime</dt><dd>${Math.floor((s.uptime_seconds || 0) / 60)} min</dd>
     <dt>Last exit</dt><dd>${s.last_exit_code ?? "None"}</dd>
+    ${s.last_start_error ? `<dt>Last start error</dt><dd class="error">${escapeHtml(s.last_start_error)}</dd>` : ""}
     <dt>Manager activity</dt><dd>${s.activity || "idle"}</dd>
   `;
 }

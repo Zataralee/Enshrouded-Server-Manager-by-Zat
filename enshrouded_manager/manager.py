@@ -27,8 +27,17 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 
-APP_VERSION = "0.10.0-linux-alpha.1"
+APP_VERSION = "0.10.0-linux-alpha.2"
 UPDATE_LOG = [
+    {
+        "version": "0.10.0-linux-alpha.2",
+        "date": "2026-10-16",
+        "changes": [
+            "Stopped failed update-before-start attempts from retrying every monitor cycle.",
+            "Isolated per-server monitor failures so one server cannot block checks for the others.",
+            "Added a visible last-start error to the server dashboard.",
+        ],
+    },
     {
         "version": "0.10.0-linux-alpha.1",
         "date": "2026-09-11",
@@ -421,6 +430,7 @@ def default_instance(name, path):
         "last_restarted_at": "",
         "last_updated_at": "",
         "last_exit_code": None,
+        "last_start_error": "",
     }
 
 
@@ -878,7 +888,28 @@ class ServerSupervisor:
                 "last_stopped_at": inst.get("last_stopped_at", ""),
                 "last_restarted_at": inst.get("last_restarted_at", ""),
                 "last_updated_at": inst.get("last_updated_at", ""),
+                "last_start_error": inst.get("last_start_error", ""),
             }
+
+    def record_start_failure(self, message, stage="start"):
+        with self.lock:
+            self.activity = "idle"
+            self.process = None
+        update_instance_metadata(
+            self.instance_id,
+            pid=0,
+            process_group_id=0,
+            desired_running=False,
+            last_start_error=message,
+        )
+        inst = get_instance(self.instance_id)
+        write_log(f"{message} Server: {inst['name']}")
+        notify_webhook_event(
+            "server.failed",
+            self.instance_id,
+            message=f"{inst['name']} failed to start.",
+            details={"stage": stage, "error": message},
+        )
 
     def start(self, update_first=False):
         with self.lock:
@@ -893,54 +924,75 @@ class ServerSupervisor:
             self.intentional_stop = False
             self.activity = "updating" if update_first else "starting"
         if update_first:
-            run_update(self.instance_id)
-        with self.lock:
-            if self.process is not None and self.process.poll() is None:
+            try:
+                run_update(self.instance_id)
+            except Exception as exc:
+                if isinstance(exc, subprocess.CalledProcessError):
+                    detail = f"SteamCMD exited with code {exc.returncode}"
+                else:
+                    detail = str(exc)
+                message = f"Update before start failed: {detail}. The server was not started. Disable update before start to launch without updating."
+                self.record_start_failure(message, stage="update")
+                raise RuntimeError(message) from exc
+        try:
+            with self.lock:
+                if self.process is not None and self.process.poll() is None:
+                    self.activity = "idle"
+                    return
+                exe = instance_exe_path(self.instance_id)
+                server_dir = instance_path(self.instance_id)
+                if not exe.exists():
+                    raise FileNotFoundError(f"Enshrouded server is not installed at {server_dir}")
+                if not instance_config_path(self.instance_id).exists():
+                    inst = get_instance(self.instance_id)
+                    save_json(instance_config_path(self.instance_id), default_server_config(inst["name"], DEFAULT_QUERY_PORT))
+                    write_log(f"Created initial enshrouded_server.json for {inst['name']}")
+                validate_instance_can_start(self.instance_id)
+                launch = server_launch_spec(self.instance_id)
+                popen_options = {
+                    "cwd": str(server_dir),
+                    "stdin": subprocess.DEVNULL,
+                    "stdout": subprocess.DEVNULL,
+                    "stderr": subprocess.DEVNULL,
+                }
+                if IS_WINDOWS:
+                    creationflags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+                    if hasattr(subprocess, "CREATE_BREAKAWAY_FROM_JOB"):
+                        creationflags |= subprocess.CREATE_BREAKAWAY_FROM_JOB
+                    popen_options["creationflags"] = creationflags
+                else:
+                    popen_options["env"] = launch["env"]
+                    popen_options["start_new_session"] = True
+                self.process = subprocess.Popen(
+                    launch["command"],
+                    **popen_options,
+                )
+                self._started_ts = time.time()
+                self.started_at = now_iso()
+                self.last_exit_code = None
                 self.activity = "idle"
-                return
-            exe = instance_exe_path(self.instance_id)
-            server_dir = instance_path(self.instance_id)
-            if not exe.exists():
-                raise FileNotFoundError(f"Enshrouded server is not installed at {server_dir}")
-            if not instance_config_path(self.instance_id).exists():
-                inst = get_instance(self.instance_id)
-                save_json(instance_config_path(self.instance_id), default_server_config(inst["name"], DEFAULT_QUERY_PORT))
-                write_log(f"Created initial enshrouded_server.json for {inst['name']}")
-            validate_instance_can_start(self.instance_id)
-            launch = server_launch_spec(self.instance_id)
-            popen_options = {
-                "cwd": str(server_dir),
-                "stdin": subprocess.DEVNULL,
-                "stdout": subprocess.DEVNULL,
-                "stderr": subprocess.DEVNULL,
-            }
-            if IS_WINDOWS:
-                creationflags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
-                if hasattr(subprocess, "CREATE_BREAKAWAY_FROM_JOB"):
-                    creationflags |= subprocess.CREATE_BREAKAWAY_FROM_JOB
-                popen_options["creationflags"] = creationflags
-            else:
-                popen_options["env"] = launch["env"]
-                popen_options["start_new_session"] = True
-            self.process = subprocess.Popen(
-                launch["command"],
-                **popen_options,
-            )
-            self._started_ts = time.time()
-            self.started_at = now_iso()
-            self.last_exit_code = None
-            self.activity = "idle"
-            update_instance_metadata(
-                self.instance_id,
-                pid=self.process.pid,
-                process_group_id=0 if IS_WINDOWS else self.process.pid,
-                runtime=launch["runtime"],
-                desired_running=True,
-                last_started_at=self.started_at,
-                last_exit_code=None,
-            )
-            write_log(f"Started {get_instance(self.instance_id)['name']} pid={self.process.pid}")
-            notify_webhook_event("server.started", self.instance_id, message=f"{get_instance(self.instance_id)['name']} started.")
+                update_instance_metadata(
+                    self.instance_id,
+                    pid=self.process.pid,
+                    process_group_id=0 if IS_WINDOWS else self.process.pid,
+                    runtime=launch["runtime"],
+                    desired_running=True,
+                    last_started_at=self.started_at,
+                    last_exit_code=None,
+                    last_start_error="",
+                )
+                write_log(f"Started {get_instance(self.instance_id)['name']} pid={self.process.pid}")
+                notify_webhook_event("server.started", self.instance_id, message=f"{get_instance(self.instance_id)['name']} started.")
+        except Exception as exc:
+            with self.lock:
+                process_running = self.process is not None and self.process.poll() is None
+                if process_running:
+                    self.activity = "idle"
+            if process_running:
+                raise RuntimeError(f"Server started, but manager finalization failed: {exc}") from exc
+            message = f"Server start failed: {exc}"
+            self.record_start_failure(message)
+            raise RuntimeError(message) from exc
         time.sleep(2)
         with self.lock:
             if self.process is not None:
@@ -954,18 +1006,26 @@ class ServerSupervisor:
                         return
                     self.last_exit_code = code
                     self.process = None
-                    update_instance_metadata(self.instance_id, pid=0, process_group_id=0, desired_running=False, last_exit_code=code)
                     signed = signed_exit_code(code)
                     hint = ""
                     if signed == -1:
                         hint = " This often means the configured query port is already in use or blocked."
+                    message = f"Enshrouded server exited immediately with code {code} ({signed}).{hint}"
+                    update_instance_metadata(
+                        self.instance_id,
+                        pid=0,
+                        process_group_id=0,
+                        desired_running=False,
+                        last_exit_code=code,
+                        last_start_error=message,
+                    )
                     notify_webhook_event(
                         "server.failed",
                         self.instance_id,
                         message=f"{get_instance(self.instance_id)['name']} failed to start.",
                         details={"exit_code": code, "signed_exit_code": signed},
                     )
-                    raise RuntimeError(f"Enshrouded server exited immediately with code {code} ({signed}).{hint}")
+                    raise RuntimeError(message)
 
     def stop(self):
         with self.lock:
@@ -1265,6 +1325,7 @@ def migrate_config(cfg):
             "last_restarted_at": "",
             "last_updated_at": "",
             "last_exit_code": None,
+            "last_start_error": "",
         }.items():
             if key not in inst:
                 inst[key] = value
@@ -3815,16 +3876,23 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json({"error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
 
 
+def monitor_iteration():
+    try:
+        check_manager_updates(force=False)
+    except Exception as exc:
+        write_log(f"Manager update monitor error: {exc}")
+    for inst in instances():
+        try:
+            supervisor(inst["id"]).monitor_once()
+            scheduled_restart_check(inst["id"])
+            scheduled_backup_check(inst["id"])
+        except Exception as exc:
+            write_log(f"Monitor error for {inst.get('name') or inst['id']}: {exc}")
+
+
 def monitor_loop():
     while True:
-        try:
-            check_manager_updates(force=False)
-            for inst in instances():
-                supervisor(inst["id"]).monitor_once()
-                scheduled_restart_check(inst["id"])
-                scheduled_backup_check(inst["id"])
-        except Exception as exc:
-            write_log(f"Monitor error: {exc}")
+        monitor_iteration()
         time.sleep(max(2, int(config().get("restart_check_interval_seconds", 5))))
 
 

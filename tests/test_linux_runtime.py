@@ -42,17 +42,17 @@ class LinuxRuntimeTests(unittest.TestCase):
 
     def test_linux_update_check_can_select_prerelease_asset(self):
         releases = [
-            {"tag_name": "v0.10.0-linux-alpha.1", "draft": False, "assets": [{"name": "ESM-Z-Linux-PythonRequired-v0.10.0-linux-alpha.1.tar.gz"}]},
+            {"tag_name": "v0.10.0-linux-alpha.2", "draft": False, "assets": [{"name": "ESM-Z-Linux-PythonRequired-v0.10.0-linux-alpha.2.tar.gz"}]},
             {"tag_name": "v0.9.1", "draft": False, "assets": [{"name": "ESM-Z-PythonRequired-v0.9.1.zip"}]},
         ]
         with mock.patch.object(manager, "IS_WINDOWS", False), mock.patch.object(manager, "github_json", return_value=releases):
             selected = manager.latest_release_for_host("owner/repo")
 
-        self.assertEqual("v0.10.0-linux-alpha.1", selected["tag_name"])
+        self.assertEqual("v0.10.0-linux-alpha.2", selected["tag_name"])
 
     def test_alpha_revision_can_update_without_appearing_newer_than_stable(self):
-        self.assertTrue(manager.is_newer_version("0.10.0-linux-alpha.2", "0.10.0-linux-alpha.1"))
-        self.assertTrue(manager.is_newer_version("0.10.0", "0.10.0-linux-alpha.2"))
+        self.assertTrue(manager.is_newer_version("0.10.0-linux-alpha.3", "0.10.0-linux-alpha.2"))
+        self.assertTrue(manager.is_newer_version("0.10.0", "0.10.0-linux-alpha.3"))
 
     def test_configured_proton_builds_isolated_launch_spec(self):
         with tempfile.TemporaryDirectory() as temporary:

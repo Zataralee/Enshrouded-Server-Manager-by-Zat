@@ -20,6 +20,13 @@ Changes:
 
 ## Experimental Prerelease
 
+**v0.10.0-linux-alpha.2** - 2026-10-16
+
+- Prevented a failed update-before-start operation from retrying every monitor cycle.
+- Isolated per-server monitor failures so one broken instance cannot block monitoring, restarts, or backups for the others.
+- Added a visible last-start error to the server dashboard.
+- Added Linux and Python-required Windows test packages for the corrective alpha.
+
 **v0.10.0-linux-alpha.1** - 2026-09-11
 
 - Added an experimental Linux host path using Wine or Proton.

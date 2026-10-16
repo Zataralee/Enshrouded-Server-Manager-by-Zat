@@ -6,7 +6,7 @@ The stable release supports Windows hosts. Experimental Linux compatibility work
 
 Current release: **v0.9.1**
 
-Experimental prerelease: **v0.10.0-linux-alpha.1**
+Experimental prerelease: **v0.10.0-linux-alpha.2**
 
 Shareable package: [`release/ESM-Z-PythonRequired-v0.9.1.zip`](release/ESM-Z-PythonRequired-v0.9.1.zip)
 
