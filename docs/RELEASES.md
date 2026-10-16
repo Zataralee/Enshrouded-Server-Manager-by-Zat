@@ -2,21 +2,19 @@
 
 ## Current Release
 
-**v0.9.2** - 2026-10-16
+**v0.9.3** - 2026-10-16
 
 Package:
 
 ```text
-release/ESM-Z-PythonRequired-v0.9.2.zip
+release/ESM-Z-PythonRequired-v0.9.3.zip
 ```
 
 Changes:
 
-- Added an admin update notice and explicit Download & Install action.
-- Removed automatic manager update installation; background checks are notification-only.
-- Added stable and testing release-channel selection, with stable releases selected by default.
-- Added optional SHA-256 verification, package version validation, backup, and rollback protection.
-- Added an installed-pending-restart state while keeping running game servers independent from the manager restart.
+- Failed update-before-start checks now show a warning and continue by launching the existing server installation.
+- Added a server update failed webhook event for failed SteamCMD checks.
+- Added the running ESM-Z version to the persistent header on every manager page.
 
 ## Experimental Linux Prerelease
 
@@ -25,6 +23,14 @@ Changes:
 Linux host support remains experimental and is distributed separately from the stable Windows package. See the GitHub prerelease and `codex/linux-alpha` branch for Linux packages and test instructions.
 
 ## Version History
+
+### v0.9.2 - 2026-10-16
+
+- Added an admin update notice and explicit Download & Install action.
+- Removed automatic manager update installation; background checks are notification-only.
+- Added stable and testing release-channel selection, with stable releases selected by default.
+- Added optional SHA-256 verification, package version validation, backup, and rollback protection.
+- Added an installed-pending-restart state while keeping running game servers independent from the manager restart.
 
 ### v0.9.1 - 2026-09-08
 

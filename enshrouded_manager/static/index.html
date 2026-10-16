@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ESM-Z</title>
-    <link rel="stylesheet" href="/styles.css?v=20261016-self-update">
+    <link rel="stylesheet" href="/styles.css?v=20261016-update-fallback">
 </head>
 <body>
   <div id="login" class="login hidden">
@@ -30,7 +30,10 @@
   <main id="app" class="hidden">
     <header>
       <div>
-        <h1>ESM-Z</h1>
+        <div class="brand-title">
+          <h1>ESM-Z</h1>
+          <span id="runningVersion" class="version-badge">Version loading</span>
+        </div>
         <p id="address"></p>
       </div>
       <div class="status">
@@ -427,6 +430,6 @@
 
     <div id="toast"></div>
   </main>
-  <script src="/app.js?v=20261016-self-update"></script>
+  <script src="/app.js?v=20261016-update-fallback"></script>
 </body>
 </html>

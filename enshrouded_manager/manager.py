@@ -26,8 +26,17 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 
-APP_VERSION = "0.9.2"
+APP_VERSION = "0.9.3"
 UPDATE_LOG = [
+    {
+        "version": "0.9.3",
+        "date": "2026-10-16",
+        "changes": [
+            "Changed update-before-start failures into visible warnings so an installed server can still start.",
+            "Added a server update failed webhook event for failed SteamCMD checks.",
+            "Added the running ESM-Z version to the persistent page header.",
+        ],
+    },
     {
         "version": "0.9.2",
         "date": "2026-10-16",
@@ -223,6 +232,7 @@ WEBHOOK_EVENTS = {
     "server.crashed": "Server crashed",
     "server.failed": "Server failed to start",
     "server.updated": "Server update completed",
+    "server.update.failed": "Server update failed",
     "server.backup.created": "Backup created",
     "server.backup.ftp": "FTP backup completed",
     "server.install.started": "Server install started",
@@ -239,6 +249,7 @@ DEFAULT_WEBHOOK_EVENTS = [
     "server.crashed",
     "server.failed",
     "server.updated",
+    "server.update.failed",
     "server.backup.created",
     "server.backup.ftp",
     "server.install.completed",
@@ -415,6 +426,7 @@ def default_instance(name, path):
         "last_stopped_at": "",
         "last_restarted_at": "",
         "last_updated_at": "",
+        "last_update_warning": "",
         "last_exit_code": None,
     }
 
@@ -666,6 +678,7 @@ class ServerSupervisor:
                 "last_stopped_at": inst.get("last_stopped_at", ""),
                 "last_restarted_at": inst.get("last_restarted_at", ""),
                 "last_updated_at": inst.get("last_updated_at", ""),
+                "last_update_warning": inst.get("last_update_warning", ""),
             }
 
     def start(self, update_first=False):
@@ -681,7 +694,24 @@ class ServerSupervisor:
             self.intentional_stop = False
             self.activity = "updating" if update_first else "starting"
         if update_first:
-            run_update(self.instance_id)
+            try:
+                run_update(self.instance_id)
+            except Exception as exc:
+                if isinstance(exc, subprocess.CalledProcessError):
+                    detail = f"SteamCMD exited with code {exc.returncode}"
+                else:
+                    detail = str(exc) or exc.__class__.__name__
+                warning = f"Update check failed: {detail}. Starting the existing server installation instead."
+                write_log(warning)
+                update_instance_metadata(self.instance_id, last_update_warning=warning)
+                notify_webhook_event(
+                    "server.update.failed",
+                    self.instance_id,
+                    message=f"Update check failed for {get_instance(self.instance_id)['name']}; starting the existing installation.",
+                    details={"error": detail},
+                )
+                with self.lock:
+                    self.activity = "starting"
         with self.lock:
             if self.process is not None and self.process.poll() is None:
                 self.activity = "idle"
@@ -1036,6 +1066,7 @@ def migrate_config(cfg):
             "last_stopped_at": "",
             "last_restarted_at": "",
             "last_updated_at": "",
+            "last_update_warning": "",
             "last_exit_code": None,
         }.items():
             if key not in inst:
@@ -2648,7 +2679,7 @@ def run_update(instance_id=None, status=None):
         check=True,
     )
     write_log("SteamCMD update check completed")
-    update_instance_metadata(get_instance(instance_id)["id"], last_updated_at=now_iso())
+    update_instance_metadata(get_instance(instance_id)["id"], last_updated_at=now_iso(), last_update_warning="")
     notify_webhook_event("server.updated", get_instance(instance_id)["id"], message=f"Update check completed for {get_instance(instance_id)['name']}.")
     if status:
         status("SteamCMD install/update completed")

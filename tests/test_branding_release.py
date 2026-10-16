@@ -38,6 +38,7 @@ class BrandingReleaseTests(unittest.TestCase):
 
         self.assertIn("<title>ESM-Z</title>", page)
         self.assertIn("<h1>ESM-Z</h1>", page)
+        self.assertIn('id="runningVersion"', page)
         self.assertIn('id="managerInstalledVersion"', page)
         self.assertIn("Advanced update source", page)
         self.assertNotIn("<title>Enshrouded Server Manager</title>", page)

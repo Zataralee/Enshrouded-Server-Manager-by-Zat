@@ -16,7 +16,7 @@ The current shared package does not bundle Python.
 Download the current release package from this repository:
 
 ```text
-release/ESM-Z-PythonRequired-v0.9.2.zip
+release/ESM-Z-PythonRequired-v0.9.3.zip
 ```
 
 Extract it somewhere permanent, for example:
