@@ -58,12 +58,7 @@ class ServerUpdateFallbackTests(unittest.TestCase):
         self.assertEqual(4321, instance["pid"])
         self.assertIn("SteamCMD exited with code 8", instance["last_update_warning"])
         self.assertTrue(popen.called)
-        notify.assert_any_call(
-            "server.update.failed",
-            self.instance_id,
-            message="Update check failed for Test Server; starting the existing installation.",
-            details={"error": "SteamCMD exited with code 8"},
-        )
+        notify.assert_called_once_with("server.started", self.instance_id, message="Test Server started.")
 
     def test_manual_update_failure_is_still_reported(self):
         steamcmd = self.temp_path / "steamcmd" / "steamcmd.exe"
@@ -72,7 +67,8 @@ class ServerUpdateFallbackTests(unittest.TestCase):
         update_error = subprocess.CalledProcessError(8, [str(steamcmd), "+app_update"])
 
         with mock.patch.object(manager, "ensure_steamcmd", return_value=steamcmd), \
-                mock.patch.object(manager.subprocess, "run", side_effect=update_error):
+                mock.patch.object(manager, "steamcmd_update_attempt", side_effect=update_error), \
+                mock.patch.object(manager, "notify_webhook_event"):
             with self.assertRaises(subprocess.CalledProcessError):
                 manager.run_update(self.instance_id)
 
@@ -83,7 +79,7 @@ class ServerUpdateFallbackTests(unittest.TestCase):
         steamcmd.write_bytes(b"test executable")
 
         with mock.patch.object(manager, "ensure_steamcmd", return_value=steamcmd), \
-                mock.patch.object(manager.subprocess, "run"), \
+                mock.patch.object(manager, "steamcmd_update_attempt"), \
                 mock.patch.object(manager, "notify_webhook_event"):
             manager.run_update(self.instance_id)
 

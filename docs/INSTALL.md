@@ -16,7 +16,7 @@ The current shared package does not bundle Python.
 Download the current release package from this repository:
 
 ```text
-release/ESM-Z-PythonRequired-v0.9.3.zip
+release/ESM-Z-PythonRequired-v0.9.4.zip
 ```
 
 Extract it somewhere permanent, for example:
@@ -102,3 +102,5 @@ To update from the UI:
 5. Check the Updates tab for the version history.
 
 Game servers should still be visible when the manager comes back up.
+
+For game server updates, stop the selected server and click **Update Check**, or use **Start/Restart** with **Always run update check before start/restart** enabled. SteamCMD progress is saved under that server's **Logs** tab as `esm-steamcmd.log`. ESM-Z backs up the selected server's Steam manifests and retries once if SteamCMD reports the known Enshrouded `0x6` failure. See [SteamCMD Update Recovery](STEAMCMD_RECOVERY.md) for details.

@@ -48,12 +48,12 @@ class ManagerSelfUpdateTests(unittest.TestCase):
                 cfg["manager_updates"]["auto_install"] = True
                 manager.save_json(manager.MANAGER_CONFIG, cfg)
                 release = {
-                    "tag_name": "v0.9.4",
+                    "tag_name": "v99.0.0",
                     "draft": False,
                     "prerelease": False,
                     "html_url": "https://example.invalid/release",
                     "assets": [{
-                        "name": "ESM-Z-PythonRequired-v0.9.4.zip",
+                        "name": "ESM-Z-PythonRequired-v99.0.0.zip",
                         "browser_download_url": "https://example.invalid/update.zip",
                     }],
                 }
@@ -69,9 +69,9 @@ class ManagerSelfUpdateTests(unittest.TestCase):
 
     def test_pending_restart_has_distinct_public_state(self):
         status = manager.public_manager_updates({
-            "latest_version": "0.9.4",
+            "latest_version": "99.0.0",
             "package_available": True,
-            "installed_pending_version": "0.9.4",
+            "installed_pending_version": "99.0.0",
             "restart_required": True,
             "last_error": "",
         })
@@ -123,7 +123,7 @@ class ManagerSelfUpdateTests(unittest.TestCase):
 
             package = temp / "release.zip"
             with zipfile.ZipFile(package, "w") as archive:
-                archive.writestr("enshrouded_manager/manager.py", 'APP_VERSION = "0.9.4"\n')
+                archive.writestr("enshrouded_manager/manager.py", 'APP_VERSION = "99.0.0"\n')
                 archive.writestr("enshrouded_manager/static/index.html", "new")
                 archive.writestr("enshrouded_manager/new.txt", "new")
 
@@ -137,11 +137,11 @@ class ManagerSelfUpdateTests(unittest.TestCase):
                 cfg["manager_updates"]["update_available"] = True
                 manager.save_json(manager.MANAGER_CONFIG, cfg)
                 release = {
-                    "tag_name": "v0.9.4",
+                    "tag_name": "v99.0.0",
                     "draft": False,
                     "prerelease": False,
                     "assets": [{
-                        "name": "ESM-Z-PythonRequired-v0.9.4.zip",
+                        "name": "ESM-Z-PythonRequired-v99.0.0.zip",
                         "browser_download_url": "https://example.invalid/release.zip",
                     }],
                 }
@@ -161,7 +161,7 @@ class ManagerSelfUpdateTests(unittest.TestCase):
             self.assertFalse((app_dir / "old.txt").exists())
             self.assertEqual("new", (app_dir / "new.txt").read_text(encoding="utf-8"))
             self.assertTrue(result["restart_required"])
-            self.assertEqual("0.9.4", result["installed_pending_version"])
+            self.assertEqual("99.0.0", result["installed_pending_version"])
 
 
 if __name__ == "__main__":

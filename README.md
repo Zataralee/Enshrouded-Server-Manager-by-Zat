@@ -2,13 +2,13 @@
 
 **ESM-Z - Enshrouded Server Manager by Zat** is a Windows-friendly web manager for running one or more Enshrouded dedicated server instances from a browser.
 
-The stable release supports Windows hosts. Experimental Linux support is available separately through the `v0.10.0-linux-alpha.3` prerelease and is not production-ready.
+The stable release supports Windows hosts. Experimental Linux support is available separately through the `v0.10.0-linux-alpha.5` prerelease and is not production-ready.
 
-Current release: **v0.9.3**
+Current release: **v0.9.4**
 
-Experimental Linux prerelease: **v0.10.0-linux-alpha.3**
+Experimental Linux prerelease: **v0.10.0-linux-alpha.5**
 
-Shareable package: [`release/ESM-Z-PythonRequired-v0.9.3.zip`](release/ESM-Z-PythonRequired-v0.9.3.zip)
+Shareable package: [`release/ESM-Z-PythonRequired-v0.9.4.zip`](release/ESM-Z-PythonRequired-v0.9.4.zip)
 
 ![ESM-Z dashboard](docs/screenshots/dashboard.png)
 
@@ -33,7 +33,7 @@ Shareable package: [`release/ESM-Z-PythonRequired-v0.9.3.zip`](release/ESM-Z-Pyt
 
 Use the Python-required release if Python 3.11 or newer is already installed on the server.
 
-1. Download [`release/ESM-Z-PythonRequired-v0.9.3.zip`](release/ESM-Z-PythonRequired-v0.9.3.zip).
+1. Download [`release/ESM-Z-PythonRequired-v0.9.4.zip`](release/ESM-Z-PythonRequired-v0.9.4.zip).
 2. Extract it to the machine that will host the manager.
 3. Run `Run ESM-Z.bat`.
 4. Open `http://127.0.0.1:8080` on that machine.
@@ -61,6 +61,7 @@ New installs can take several minutes. If SteamCMD is being downloaded for the f
 - [Release Notes](docs/RELEASES.md)
 - [Screenshots](docs/SCREENSHOTS.md)
 - [Linux Host Support Analysis](docs/LINUX_SUPPORT_ANALYSIS.md)
+- [SteamCMD Update Recovery](docs/STEAMCMD_RECOVERY.md)
 - [User Guide](enshrouded_manager/USER_README.md)
 - [Admin Notes](enshrouded_manager/README.md)
 

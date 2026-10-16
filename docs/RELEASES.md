@@ -2,27 +2,33 @@
 
 ## Current Release
 
-**v0.9.3** - 2026-10-16
+**v0.9.4** - 2026-10-16
 
 Package:
 
 ```text
-release/ESM-Z-PythonRequired-v0.9.3.zip
+release/ESM-Z-PythonRequired-v0.9.4.zip
 ```
 
 Changes:
 
-- Failed update-before-start checks now show a warning and continue by launching the existing server installation.
-- Added a server update failed webhook event for failed SteamCMD checks.
-- Added the running ESM-Z version to the persistent header on every manager page.
+- Automatically backs up the selected instance's Steam manifests and retries once after the known Enshrouded `0x6` update failure.
+- Runs SteamCMD installs and updates one at a time and rejects manual updates of running servers.
+- Saves SteamCMD progress to the server's `logs/esm-steamcmd.log` and displays the actual Steam error on failure.
+- Requires both a successful process exit and SteamCMD's app-specific success confirmation before recording a successful update.
 
 ## Experimental Linux Prerelease
 
-**v0.10.0-linux-alpha.3** - 2026-10-16
+**v0.10.0-linux-alpha.5** - 2026-10-16
 
 Linux host support remains experimental and is distributed separately from the stable Windows package. See the GitHub prerelease and `codex/linux-alpha` branch for Linux packages and test instructions.
 
 ## Version History
+
+### v0.9.3 - 2026-10-16
+
+- Failed update-before-start checks show a warning and continue by launching the existing server installation.
+- Added a server update failed webhook event and the running ESM-Z version to the persistent page header.
 
 ### v0.9.2 - 2026-10-16
 

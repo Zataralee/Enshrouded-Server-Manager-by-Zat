@@ -26,8 +26,18 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 
-APP_VERSION = "0.9.3"
+APP_VERSION = "0.9.4"
 UPDATE_LOG = [
+    {
+        "version": "0.9.4",
+        "date": "2026-10-16",
+        "changes": [
+            "Added automatic backup and one-time Steam manifest recovery for Enshrouded update failures with state 0x6.",
+            "Serialized SteamCMD installs and updates to prevent competing jobs from sharing the same SteamCMD process data.",
+            "Added per-server SteamCMD progress logs and detailed update errors; updates now require an explicit SteamCMD success confirmation.",
+            "Required servers to be stopped before running a manual game update check.",
+        ],
+    },
     {
         "version": "0.9.3",
         "date": "2026-10-16",
@@ -697,19 +707,15 @@ class ServerSupervisor:
             try:
                 run_update(self.instance_id)
             except Exception as exc:
-                if isinstance(exc, subprocess.CalledProcessError):
+                if isinstance(exc, SteamCMDUpdateError):
+                    detail = str(exc)
+                elif isinstance(exc, subprocess.CalledProcessError):
                     detail = f"SteamCMD exited with code {exc.returncode}"
                 else:
                     detail = str(exc) or exc.__class__.__name__
                 warning = f"Update check failed: {detail}. Starting the existing server installation instead."
                 write_log(warning)
                 update_instance_metadata(self.instance_id, last_update_warning=warning)
-                notify_webhook_event(
-                    "server.update.failed",
-                    self.instance_id,
-                    message=f"Update check failed for {get_instance(self.instance_id)['name']}; starting the existing installation.",
-                    details={"error": detail},
-                )
                 with self.lock:
                     self.activity = "starting"
         with self.lock:
@@ -854,6 +860,7 @@ class ServerSupervisor:
 SUPERVISORS = {}
 SESSIONS = {}
 CONFIG_LOCK = threading.RLock()
+STEAMCMD_LOCK = threading.Lock()
 JOBS = {}
 JOBS_LOCK = threading.RLock()
 
@@ -2657,32 +2664,111 @@ def test_webhook(instance_id, webhook_id):
     return [{"server_id": inst.get("id", ""), "webhook_id": webhook.get("id", ""), "status": status}]
 
 
+class SteamCMDUpdateError(subprocess.CalledProcessError):
+    def __str__(self):
+        lines = (self.output or "").splitlines()
+        errors = [line.strip() for line in lines if re.search(r"error!|failed to", line, re.IGNORECASE)]
+        detail = f" {errors[-1][:400]}" if errors else ""
+        result = (f"SteamCMD exited with code {self.returncode}." if self.returncode
+                  else "SteamCMD did not confirm a successful install/update.")
+        return f"{result}{detail} See Logs > esm-steamcmd.log for details."
+
+
+def steamcmd_update_command(exe, target_dir):
+    return [str(exe), "+force_install_dir", str(target_dir), "+login", "anonymous",
+            "+app_update", APP_ID, "validate", "+quit"]
+
+
+def steamcmd_update_attempt(command, log_path):
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    # Redirect directly to disk so progress is readable while SteamCMD is running.
+    with log_path.open("ab") as output:
+        output.write(f"\n[{now_iso()}] SteamCMD update attempt\n".encode("utf-8"))
+        output.flush()
+        offset = output.tell()
+        result = subprocess.run(command, cwd=str(Path(command[0]).parent),
+                                stdout=output, stderr=subprocess.STDOUT, check=False)
+    with log_path.open("rb") as output:
+        output.seek(max(offset, log_path.stat().st_size - 32768))
+        tail = output.read().decode("utf-8", errors="replace")
+    success = re.search(rf"Success!\s+App\s+'{APP_ID}'\s+(?:fully installed|already up to date)", tail, re.IGNORECASE)
+    if result.returncode or not success:
+        raise SteamCMDUpdateError(result.returncode, command, output=tail)
+
+
+def reset_instance_steam_manifests(instance_id):
+    target = instance_path(instance_id).resolve()
+    steamapps = safe_child(target, target / "steamapps")
+    manifests = [safe_child(target, steamapps / f"appmanifest_{app_id}.acf")
+                 for app_id in (APP_ID, "228980")]
+    backup = safe_child(target, steamapps / "esm-manifest-backups" /
+                        f"{dt.datetime.now().strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(4)}")
+    moved = []
+    try:
+        for manifest in manifests:
+            if manifest.is_file():
+                backup.mkdir(parents=True, exist_ok=True)
+                destination = backup / manifest.name
+                manifest.rename(destination)
+                moved.append((manifest, destination))
+                write_log(f"Backed up Steam manifest to {destination}")
+    except Exception:
+        restore_instance_steam_manifests(moved)
+        raise
+    return moved
+
+
+def restore_instance_steam_manifests(moved):
+    for manifest, backup in moved:
+        if not manifest.exists():
+            shutil.copy2(backup, manifest)
+
+
 def run_update(instance_id=None, status=None):
-    exe = ensure_steamcmd(status=status)
-    target_dir = instance_path(instance_id)
-    write_log(f"Running SteamCMD app_update {APP_ID} validate for {get_instance(instance_id)['name']}")
+    inst = get_instance(instance_id)
     if status:
-        status("Installing/updating Enshrouded Dedicated Server with SteamCMD")
-    subprocess.run(
-        [
-            str(exe),
-            "+force_install_dir",
-            str(target_dir),
-            "+login",
-            "anonymous",
-            "+app_update",
-            APP_ID,
-            "validate",
-            "+quit",
-        ],
-        cwd=str(exe.parent),
-        check=True,
-    )
-    write_log("SteamCMD update check completed")
-    update_instance_metadata(get_instance(instance_id)["id"], last_updated_at=now_iso(), last_update_warning="")
-    notify_webhook_event("server.updated", get_instance(instance_id)["id"], message=f"Update check completed for {get_instance(instance_id)['name']}.")
-    if status:
-        status("SteamCMD install/update completed")
+        status("Waiting for SteamCMD; other server installs or updates may be running")
+    with STEAMCMD_LOCK:
+        if supervisor(inst["id"]).status().get("running"):
+            raise RuntimeError("Stop this server before running its SteamCMD update check.")
+        try:
+            exe = ensure_steamcmd(status=status)
+            target_dir = instance_path(inst["id"])
+            log_path = safe_child(target_dir, target_dir / "logs" / "esm-steamcmd.log")
+            command = steamcmd_update_command(exe, target_dir)
+            write_log(f"Running SteamCMD app_update {APP_ID} validate for {inst['name']}; output: {log_path}")
+            if status:
+                status("Installing/updating Enshrouded Dedicated Server; progress is in Logs > esm-steamcmd.log")
+            try:
+                steamcmd_update_attempt(command, log_path)
+            except SteamCMDUpdateError as exc:
+                stuck_state = re.search(rf"App\s+'{APP_ID}'\s+state is\s+0x6\s+after update job", exc.output or "", re.IGNORECASE)
+                if not stuck_state:
+                    raise
+                if supervisor(inst["id"]).status().get("running"):
+                    raise RuntimeError("Server started during the update check; stop it before retrying.") from exc
+                message = "SteamCMD reported state 0x6; backing up this server's Steam manifests and retrying once"
+                write_log(message)
+                if status:
+                    status(message)
+                moved = reset_instance_steam_manifests(inst["id"])
+                try:
+                    steamcmd_update_attempt(command, log_path)
+                except Exception:
+                    restore_instance_steam_manifests(moved)
+                    raise
+        except Exception as exc:
+            warning = f"Update check failed: {exc}"
+            update_instance_metadata(inst["id"], last_update_warning=warning)
+            write_log(f"{warning} Server: {inst['name']}")
+            notify_webhook_event("server.update.failed", inst["id"],
+                                 message=f"Update check failed for {inst['name']}.", details={"error": str(exc)})
+            raise
+        write_log(f"SteamCMD update check completed for {inst['name']}")
+        update_instance_metadata(inst["id"], last_updated_at=now_iso(), last_update_warning="")
+        notify_webhook_event("server.updated", inst["id"], message=f"Update check completed for {inst['name']}.")
+        if status:
+            status("SteamCMD install/update completed")
 
 
 def generate_initial_server_config(instance_id, status=None, timeout_seconds=180):
@@ -3457,7 +3543,8 @@ class Handler(SimpleHTTPRequestHandler):
             if route == "/api/bootstrap/steamcmd":
                 if not self.require_perm("setup"):
                     return
-                ensure_steamcmd()
+                with STEAMCMD_LOCK:
+                    ensure_steamcmd()
                 return self.send_json({"ok": True, "steamcmd": str(steamcmd_path())})
             if route == "/api/instances/import":
                 if not self.require_perm("setup"):
