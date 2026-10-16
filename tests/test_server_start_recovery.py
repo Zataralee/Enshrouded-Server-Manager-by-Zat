@@ -13,11 +13,13 @@ SPEC.loader.exec_module(manager)
 
 
 class ServerStartRecoveryTests(unittest.TestCase):
-    def test_failed_update_before_start_stops_retrying_and_records_error(self):
+    def test_failed_update_before_start_warns_and_starts_existing_server(self):
         with tempfile.TemporaryDirectory() as temporary:
             temp = Path(temporary)
             server = temp / "server"
             server.mkdir()
+            executable = server / "enshrouded_server.exe"
+            executable.write_bytes(b"test executable")
             original = (manager.DATA_DIR, manager.MANAGER_CONFIG, manager.MANAGER_LOG)
             manager.DATA_DIR = temp / "data"
             manager.MANAGER_CONFIG = manager.DATA_DIR / "manager_config.json"
@@ -33,15 +35,33 @@ class ServerStartRecoveryTests(unittest.TestCase):
                 supervisor = manager.ServerSupervisor(instance["id"])
 
                 update_error = subprocess.CalledProcessError(8, ["steamcmd"])
+                process = mock.Mock(pid=4321)
+                process.poll.return_value = None
                 with mock.patch.object(manager, "run_update", side_effect=update_error), \
-                        mock.patch.object(manager, "notify_webhook_event"):
-                    with self.assertRaisesRegex(RuntimeError, "SteamCMD exited with code 8"):
-                        supervisor.start(update_first=True)
+                        mock.patch.object(manager, "validate_instance_can_start"), \
+                        mock.patch.object(manager, "server_launch_spec", return_value={
+                            "command": [str(executable)],
+                            "env": None,
+                            "runtime": "windows-native",
+                        }), \
+                        mock.patch.object(manager.subprocess, "Popen", return_value=process) as popen, \
+                        mock.patch.object(manager.time, "sleep"), \
+                        mock.patch.object(manager, "notify_webhook_event") as notify:
+                    supervisor.start(update_first=True)
 
                 saved = manager.get_instance(instance["id"])
-                self.assertFalse(saved["desired_running"])
-                self.assertIn("Disable update before start", saved["last_start_error"])
+                self.assertTrue(saved["desired_running"])
+                self.assertEqual(4321, saved["pid"])
+                self.assertEqual("", saved["last_start_error"])
+                self.assertIn("SteamCMD exited with code 8", saved["last_update_warning"])
                 self.assertEqual("idle", supervisor.status()["activity"])
+                self.assertTrue(popen.called)
+                notify.assert_any_call(
+                    "server.update.failed",
+                    instance["id"],
+                    message="Update check failed for Update Failure; starting the existing installation.",
+                    details={"error": "SteamCMD exited with code 8"},
+                )
             finally:
                 manager.DATA_DIR, manager.MANAGER_CONFIG, manager.MANAGER_LOG = original
 

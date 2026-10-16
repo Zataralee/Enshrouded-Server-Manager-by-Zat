@@ -31,6 +31,16 @@ h1 { font-size: 24px; }
 h2 { font-size: 17px; margin-bottom: 14px; }
 h3 { font-size: 15px; margin: 14px 0 8px; }
 p { margin: 6px 0 0; color: var(--muted); }
+.brand-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.version-badge {
+  color: var(--accent);
+  font-size: 12px;
+  white-space: nowrap;
+}
 nav {
   display: flex;
   gap: 6px;
@@ -495,6 +505,7 @@ pre {
 }
 .login-panel { width: min(420px, 100%); display: grid; gap: 14px; }
 .error { color: var(--danger); }
+.warning { color: var(--accent); }
 #toast {
   position: fixed;
   right: 18px;

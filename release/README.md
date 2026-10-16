@@ -1,10 +1,10 @@
 # Current Release
 
-Current package: `ESM-Z-PythonRequired-v0.9.1.zip`
+Current stable release: `v0.9.3`
 
-Compatibility asset: `EnshroudedServerManager-PythonRequired-v0.9.1.zip`
+Download: https://github.com/Zataralee/Enshrouded-Server-Manager-by-Zat/releases/tag/v0.9.3
 
-Both ZIPs contain the same files. Share the ESM-Z package with new users. The legacy-named asset exists only so v0.9.0 and older self-updaters can find this renamed release.
+The GitHub release includes the primary ESM-Z package and a legacy-named compatibility asset for older self-updaters.
 
 This package is for a Windows machine that already has Python 3.11 or newer installed.
 
@@ -18,6 +18,6 @@ The package includes install notes, user instructions, feature notes, release no
 
 ## Experimental Linux Test
 
-`ESM-Z-Linux-PythonRequired-v0.10.0-linux-alpha.3.tar.gz` is an unsupported test build for Linux hosts. Follow `docs/LINUX_ALPHA.md`; do not use it for production hosting or important worlds without a separate backup.
+`ESM-Z-Linux-PythonRequired-v0.10.0-linux-alpha.4.tar.gz` is an unsupported test build for Linux hosts. Follow `docs/LINUX_ALPHA.md`; do not use it for production hosting or important worlds without a separate backup.
 
-`ESM-Z-PythonRequired-v0.10.0-linux-alpha.3.zip` contains the same alpha manager fixes for Windows test hosts that already have Python 3.11 or newer installed.
+`ESM-Z-PythonRequired-v0.10.0-linux-alpha.4.zip` contains the same alpha manager fixes for Windows test hosts that already have Python 3.11 or newer installed.

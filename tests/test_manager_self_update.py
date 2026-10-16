@@ -51,12 +51,12 @@ class ManagerSelfUpdateTests(unittest.TestCase):
                 cfg["manager_updates"]["auto_install"] = True
                 manager.save_json(manager.MANAGER_CONFIG, cfg)
                 release = {
-                    "tag_name": "v0.10.0-linux-alpha.4",
+                    "tag_name": "v0.10.0-linux-alpha.5",
                     "draft": False,
                     "prerelease": True,
                     "html_url": "https://example.invalid/release",
                     "assets": [{
-                        "name": "ESM-Z-PythonRequired-v0.10.0-linux-alpha.4.zip",
+                        "name": "ESM-Z-PythonRequired-v0.10.0-linux-alpha.5.zip",
                         "browser_download_url": "https://example.invalid/update.zip",
                     }],
                 }
@@ -72,9 +72,9 @@ class ManagerSelfUpdateTests(unittest.TestCase):
 
     def test_pending_restart_has_distinct_public_state(self):
         status = manager.public_manager_updates({
-            "latest_version": "0.10.0-linux-alpha.4",
+            "latest_version": "0.10.0-linux-alpha.5",
             "package_available": True,
-            "installed_pending_version": "0.10.0-linux-alpha.4",
+            "installed_pending_version": "0.10.0-linux-alpha.5",
             "restart_required": True,
             "last_error": "",
         })
@@ -126,7 +126,7 @@ class ManagerSelfUpdateTests(unittest.TestCase):
 
             package = temp / "release.zip"
             with zipfile.ZipFile(package, "w") as archive:
-                archive.writestr("enshrouded_manager/manager.py", 'APP_VERSION = "0.10.0-linux-alpha.4"\n')
+                archive.writestr("enshrouded_manager/manager.py", 'APP_VERSION = "0.10.0-linux-alpha.5"\n')
                 archive.writestr("enshrouded_manager/static/index.html", "new")
                 archive.writestr("enshrouded_manager/new.txt", "new")
 
@@ -140,11 +140,11 @@ class ManagerSelfUpdateTests(unittest.TestCase):
                 cfg["manager_updates"]["update_available"] = True
                 manager.save_json(manager.MANAGER_CONFIG, cfg)
                 release = {
-                    "tag_name": "v0.10.0-linux-alpha.4",
+                    "tag_name": "v0.10.0-linux-alpha.5",
                     "draft": False,
                     "prerelease": True,
                     "assets": [{
-                        "name": "ESM-Z-PythonRequired-v0.10.0-linux-alpha.4.zip",
+                        "name": "ESM-Z-PythonRequired-v0.10.0-linux-alpha.5.zip",
                         "browser_download_url": "https://example.invalid/release.zip",
                     }],
                 }
@@ -164,7 +164,7 @@ class ManagerSelfUpdateTests(unittest.TestCase):
             self.assertFalse((app_dir / "old.txt").exists())
             self.assertEqual("new", (app_dir / "new.txt").read_text(encoding="utf-8"))
             self.assertTrue(result["restart_required"])
-            self.assertEqual("0.10.0-linux-alpha.4", result["installed_pending_version"])
+            self.assertEqual("0.10.0-linux-alpha.5", result["installed_pending_version"])
 
 
 if __name__ == "__main__":

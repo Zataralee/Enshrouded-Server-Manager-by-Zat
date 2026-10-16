@@ -13,11 +13,7 @@ The current shared package does not bundle Python.
 
 ## Download
 
-Download the current release package from this repository:
-
-```text
-release/ESM-Z-PythonRequired-v0.9.1.zip
-```
+Download `ESM-Z-PythonRequired-v0.9.3.zip` from the [v0.9.3 GitHub release](https://github.com/Zataralee/Enshrouded-Server-Manager-by-Zat/releases/tag/v0.9.3).
 
 Extract it somewhere permanent, for example:
 

@@ -263,6 +263,9 @@ function renderStatus() {
   document.querySelector("#stateDot").classList.toggle("running", !!s.running);
   document.querySelector("#stateText").textContent = inst.name ? `${inst.name}: ${s.running ? "Running" : "Stopped"}` : "No server configured";
   document.querySelector("#currentUserLabel").textContent = currentUser().username ? `Logged in as ${currentUser().username}` : "";
+  document.querySelector("#runningVersion").textContent = (state.manager || {}).app_version
+    ? `Running ESM-Z v${state.manager.app_version}`
+    : "Version unavailable";
   document.querySelector("#address").textContent = `UI: http://${location.host}${inst.path ? " | " + inst.path : ""}`;
   if (!updateActionDirty) {
     document.querySelector("#updateAction").checked = !!inst.update_before_start;
@@ -273,6 +276,7 @@ function renderStatus() {
     <dt>Started</dt><dd>${s.started_at || "Not running"}</dd>
     <dt>Last restart</dt><dd>${s.last_restarted_at || "None"}</dd>
     <dt>Last update</dt><dd>${s.last_updated_at || "None"}</dd>
+    ${s.last_update_warning ? `<dt>Update warning</dt><dd class="warning">${escapeHtml(s.last_update_warning)}</dd>` : ""}
     <dt>Last stopped</dt><dd>${s.last_stopped_at || "None"}</dd>
     <dt>Uptime</dt><dd>${Math.floor((s.uptime_seconds || 0) / 60)} min</dd>
     <dt>Last exit</dt><dd>${s.last_exit_code ?? "None"}</dd>

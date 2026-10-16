@@ -2,23 +2,23 @@
 
 ## Current Release
 
-**v0.9.1** - 2026-09-08
+**v0.9.3** - 2026-10-16
 
-Package:
-
-```text
-release/ESM-Z-PythonRequired-v0.9.1.zip
-```
+Package: download `ESM-Z-PythonRequired-v0.9.3.zip` from the [GitHub release](https://github.com/Zataralee/Enshrouded-Server-Manager-by-Zat/releases/tag/v0.9.3).
 
 Changes:
 
-- Renamed the user-facing product to ESM-Z - Enshrouded Server Manager by Zat.
-- Renamed new launchers and release packages to prefer ESM-Z while preserving legacy updater compatibility.
-- Added a repository-specific Linux host support architecture analysis; Linux runtime support is not implemented in this release.
-- Clarified installed versus published update versions and corrected misleading up-to-date results for manually updated files.
-- Moved optional private/custom GitHub credentials into collapsed advanced settings and masked them in manual update API responses.
+- Failed update-before-start checks now show a warning and continue by launching the existing server installation.
+- Added a server update failed webhook event for failed SteamCMD checks.
+- Added the running ESM-Z version to the persistent header on every manager page.
 
 ## Experimental Prerelease
+
+**v0.10.0-linux-alpha.4** - 2026-10-16
+
+- Failed update-before-start checks now show a warning and continue by launching the existing server installation.
+- Added a server update failed webhook event for failed SteamCMD checks.
+- Added the running ESM-Z version to the persistent header on every manager page.
 
 **v0.10.0-linux-alpha.3** - 2026-10-16
 
@@ -47,6 +47,18 @@ Changes:
 - This prerelease does not provide systemd services and is not production Linux support.
 
 ## Version History
+
+### v0.9.2 - 2026-10-16
+
+- Added an admin update notice and explicit Download & Install action.
+- Removed automatic manager update installation; background checks are notification-only.
+- Added stable and testing release channels, checksum verification, package validation, backup, and rollback protection.
+
+### v0.9.1 - 2026-09-08
+
+- Renamed the user-facing product to ESM-Z - Enshrouded Server Manager by Zat.
+- Preserved legacy updater package compatibility and clarified installed versus published manager versions.
+- Moved private/custom GitHub credentials into advanced settings and masked saved tokens.
 
 ### v0.9.0 - 2026-09-08
 
