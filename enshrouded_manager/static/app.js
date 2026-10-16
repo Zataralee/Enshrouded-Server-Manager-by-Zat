@@ -540,9 +540,9 @@ function renderManagerForm() {
   f.manager_updates_enabled.checked = updates.enabled !== false;
   f.manager_updates_repo.value = updates.repo || "Zataralee/Enshrouded-Server-Manager-by-Zat";
   f.manager_updates_interval_hours.value = updates.interval_hours || 24;
+  f.manager_updates_channel.value = updates.channel || "auto";
   f.manager_updates_github_token.placeholder = updates.github_token ? "Saved token hidden; leave blank to keep current" : "GitHub token for private repo";
   f.manager_updates_clear_github_token.checked = false;
-  f.manager_updates_auto_install.checked = !!updates.auto_install;
   renderManagerUpdateStatus();
   f.auto_restart.checked = !!inst.auto_restart;
   f.start_on_manager_launch.checked = !!inst.start_on_manager_launch;
@@ -638,12 +638,31 @@ function renderManagerUpdateStatus() {
   const published = document.querySelector("#managerPublishedVersion");
   const checked = document.querySelector("#managerLastChecked");
   const installButton = document.querySelector("#installManagerUpdateButton");
+  const banner = document.querySelector("#managerUpdateBanner");
+  const bannerTitle = document.querySelector("#managerUpdateBannerTitle");
+  const bannerDetail = document.querySelector("#managerUpdateBannerDetail");
+  const bannerInstallButton = document.querySelector("#bannerInstallManagerUpdateButton");
   if (!title || !detail) return;
   const installedVersion = updates.installed_version || (state.manager || {}).app_version || "";
   if (installed) installed.textContent = installedVersion ? `v${installedVersion}` : "Unknown";
   if (published) published.textContent = updates.latest_version ? `v${updates.latest_version}` : "Not checked";
   if (checked) checked.textContent = updates.last_checked_at || "Never";
   if (installButton) installButton.disabled = !(updates.release_state === "available" && updates.package_available);
+  if (bannerInstallButton) bannerInstallButton.disabled = !(updates.release_state === "available" && updates.package_available);
+  const showBanner = isAdmin() && ["available", "package_missing", "installed_pending_restart"].includes(updates.release_state);
+  if (banner) banner.classList.toggle("hidden", !showBanner);
+  if (showBanner && bannerTitle && bannerDetail) {
+    if (updates.release_state === "installed_pending_restart") {
+      bannerTitle.textContent = `ESM-Z v${updates.installed_pending_version} is installed`;
+      bannerDetail.textContent = "Restart ESM-Z to finish the update. Running game servers can remain online.";
+    } else if (updates.release_state === "package_missing") {
+      bannerTitle.textContent = `ESM-Z v${updates.latest_version} is available`;
+      bannerDetail.textContent = "A compatible self-update package has not been attached to this release yet.";
+    } else {
+      bannerTitle.textContent = `ESM-Z v${updates.latest_version} is available`;
+      bannerDetail.textContent = `You are running v${installedVersion}. Review or install the update when ready.`;
+    }
+  }
   if (updates.last_error) {
     title.textContent = "Update check failed";
     detail.textContent = updates.last_error;
@@ -651,6 +670,13 @@ function renderManagerUpdateStatus() {
     return;
   }
   detail.classList.remove("error");
+  if (updates.release_state === "installed_pending_restart") {
+    title.textContent = `ESM-Z v${updates.installed_pending_version} is installed and ready`;
+    detail.textContent = updates.checksum_verified
+      ? "The package checksum was verified. Restart ESM-Z to run the new version; game servers can remain online."
+      : "Restart ESM-Z to run the new version; game servers can remain online.";
+    return;
+  }
   if (updates.release_state === "available") {
     title.textContent = `ESM-Z update available: v${updates.latest_version}`;
     detail.textContent = updates.latest_url ? `Install package: ${updates.latest_url}` : "The release is newer, but no package URL was reported.";
@@ -906,6 +932,7 @@ async function refresh() {
   renderAccounts();
   renderSchedules();
   renderLogs();
+  renderManagerUpdateStatus();
   renderManagerForm();
   renderBackupSchedule();
   renderWebhookForm();
@@ -1300,17 +1327,22 @@ document.addEventListener("click", async event => {
         package_missing: "New release found, but its install package is missing",
         current: "Installed version matches the latest published release",
         local_newer: "Installed files are newer than the latest published release",
+        installed_pending_restart: "Update installed; restart ESM-Z to finish",
         error: "Update check failed",
       };
       toast(messages[result.manager_updates.release_state] || "Update check completed");
       return;
     }
+    if (action === "openManagerUpdates") {
+      activateTab("manager");
+      return;
+    }
     if (action === "installManagerUpdate") {
-      if (!confirm("Install the available manager update package? Restart the manager after it finishes to run the new version.")) return;
+      if (!confirm("Download and install the available ESM-Z update? Manager files will be backed up first. Running game servers will not be stopped.")) return;
       const result = await api("/api/manager/install-update", { method: "POST" });
       state.manager.manager_updates = result.manager_updates;
       renderManagerUpdateStatus();
-      toast("Manager update installed. Restart the manager to use it.");
+      toast("Update installed. Restart ESM-Z to finish.");
       return;
     }
     if (action === "discoverSaves") {
@@ -1396,9 +1428,9 @@ document.querySelector("#managerForm").addEventListener("submit", async event =>
       enabled: data.has("manager_updates_enabled"),
       repo: data.get("manager_updates_repo"),
       interval_hours: Number(data.get("manager_updates_interval_hours") || 24),
+      channel: data.get("manager_updates_channel") || "auto",
       github_token: data.get("manager_updates_github_token"),
       clear_github_token: data.has("manager_updates_clear_github_token"),
-      auto_install: data.has("manager_updates_auto_install"),
     },
   };
   const instancePayload = {

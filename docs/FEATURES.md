@@ -66,8 +66,10 @@
 - Show the installed version separately from the latest published GitHub Release and last check time.
 - Distinguish an available update, an exact match, a manually installed newer build, and a release missing its install package.
 - Configure the check interval from the Manager tab.
+- Follow the installed build by default: stable installs see stable releases, while test builds can see newer prereleases.
 - Keep custom repository and private-repository token settings in the collapsed Advanced update source section. The default public repository does not require a token.
-- Automatically install available Python-required manager packages when enabled.
+- Display an admin update notice and install a compatible package only when an admin clicks Download & Install Update.
+- Verify release checksums when provided, validate the package version, back up the current manager files, and roll back a failed replacement.
 - Restart the manager after a self-update install to run the new version.
 
 ## Logs And Instructions

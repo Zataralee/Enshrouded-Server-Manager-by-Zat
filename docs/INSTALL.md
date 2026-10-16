@@ -16,7 +16,7 @@ The current shared package does not bundle Python.
 Download the current release package from this repository:
 
 ```text
-release/ESM-Z-PythonRequired-v0.9.1.zip
+release/ESM-Z-PythonRequired-v0.9.2.zip
 ```
 
 Extract it somewhere permanent, for example:
@@ -91,13 +91,14 @@ New installs can take several minutes. If SteamCMD has to be downloaded for the 
 
 Running game servers are launched as persistent detached processes. Closing or updating the manager should not intentionally stop every running game server.
 
-The Manager tab checks published GitHub Releases for ESM-Z updates. Git tags and manually copied files are not releases. The status panel shows the installed version, latest published release, and last check separately so a local build newer than the published release is not mislabeled as up to date. The default repository is public and needs no token; custom repository and private-repository credentials are under Advanced update source. Automatic self-update accepts a Python-required zip package named like `ESM-Z-PythonRequired-vX.Y.Z.zip`; the legacy `EnshroudedServerManager-PythonRequired-vX.Y.Z.zip` name remains supported for older installations. If a Windows Python install has broken certificate authority data, ESM-Z logs that certificate verification failed and retries the GitHub request so update checks still work.
+The Manager tab checks published GitHub Releases for ESM-Z updates. Git tags and manually copied files are not releases. The status panel shows the installed version, latest published release, and last check separately so a local build newer than the published release is not mislabeled as up to date. The default repository is public and needs no token; custom repository and private-repository credentials are under Advanced update source. Update checks never install files automatically. When a compatible update is available, an admin notice appears and the admin can click **Download & Install Update**. ESM-Z verifies the release checksum when one is attached, validates the package version, backs up the existing manager files, and preserves the `data` directory. Restart ESM-Z after the install completes; running game servers are not intentionally stopped.
 
-To update the manager:
+To update from the UI:
 
-1. Stop the manager window/process.
-2. Replace the manager files with the newer package.
-3. Start `Run ESM-Z.bat` again.
-4. Check the Updates tab for the version history.
+1. Open Manager and review the ESM-Z Updates section.
+2. Click **Check Now** if you do not want to wait for the scheduled check.
+3. Click **Download & Install Update** and confirm the prompt.
+4. After ESM-Z reports that the package is installed, restart the manager process.
+5. Check the Updates tab for the version history.
 
 Game servers should still be visible when the manager comes back up.

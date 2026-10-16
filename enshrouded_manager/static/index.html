@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ESM-Z</title>
-    <link rel="stylesheet" href="/styles.css?v=20260908-update-status">
+    <link rel="stylesheet" href="/styles.css?v=20261016-self-update">
 </head>
 <body>
   <div id="login" class="login hidden">
@@ -63,6 +63,17 @@
         <button data-tab="profile" data-parent-section="account">My Account</button>
         <button data-tab="invites" data-parent-section="account" data-invites-only="true">Invites</button>
         <button data-tab="users" data-parent-section="account" data-users-only="true">Users</button>
+      </div>
+    </div>
+
+    <div id="managerUpdateBanner" class="manager-update-banner hidden" data-admin-only="true">
+      <div>
+        <strong id="managerUpdateBannerTitle">ESM-Z update available</strong>
+        <small id="managerUpdateBannerDetail"></small>
+      </div>
+      <div class="actions">
+        <button type="button" data-action="openManagerUpdates">Review</button>
+        <button id="bannerInstallManagerUpdateButton" type="button" data-action="installManagerUpdate">Download & Install</button>
       </div>
     </div>
 
@@ -368,7 +379,14 @@
         <h2>ESM-Z Updates</h2>
         <label class="check"><input name="manager_updates_enabled" type="checkbox"> Check GitHub for ESM-Z updates</label>
         <label>Check interval hours <input name="manager_updates_interval_hours" type="number" min="1"></label>
-        <label class="check"><input name="manager_updates_auto_install" type="checkbox"> Automatically install available manager update packages</label>
+        <label>Update channel
+          <select name="manager_updates_channel">
+            <option value="auto">Match installed build</option>
+            <option value="stable">Stable releases only</option>
+            <option value="prerelease">Stable and testing releases</option>
+          </select>
+        </label>
+        <p class="form-note">ESM-Z checks in the background and shows a notice when an update is available. Updates are installed only when an admin clicks the install button.</p>
         <div class="wide-field update-check-panel">
           <strong id="managerUpdateStatus">Update status unavailable</strong>
           <dl class="update-facts">
@@ -379,7 +397,7 @@
           <small id="managerUpdateDetail"></small>
           <div class="actions">
             <button type="button" data-action="checkManagerUpdate">Check Now</button>
-            <button id="installManagerUpdateButton" type="button" data-action="installManagerUpdate">Install Available Update</button>
+            <button id="installManagerUpdateButton" type="button" data-action="installManagerUpdate">Download & Install Update</button>
           </div>
         </div>
         <details class="wide-field update-source-settings">
@@ -409,6 +427,6 @@
 
     <div id="toast"></div>
   </main>
-  <script src="/app.js?v=20260908-update-status"></script>
+  <script src="/app.js?v=20261016-self-update"></script>
 </body>
 </html>

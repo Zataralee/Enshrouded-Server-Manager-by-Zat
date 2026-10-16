@@ -83,6 +83,10 @@ enshrouded_manager\data\manager.log
 [System.IO.Compression.ZipFile]::CreateFromDirectory($Stage, $Zip)
 [System.IO.File]::Copy($Zip, $VersionZip, $true)
 [System.IO.File]::Copy($Zip, $LegacyVersionZip, $true)
+$Checksum = "$VersionZip.sha256"
+$Digest = (Get-FileHash -LiteralPath $VersionZip -Algorithm SHA256).Hash.ToLowerInvariant()
+Set-Content -LiteralPath $Checksum -Value "$Digest  $(Split-Path -Leaf $VersionZip)" -Encoding ASCII
 Write-Host "Created $Zip"
 Write-Host "Version history copy $VersionZip"
 Write-Host "Legacy updater compatibility copy $LegacyVersionZip"
+Write-Host "SHA-256 $Digest"

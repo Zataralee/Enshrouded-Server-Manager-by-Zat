@@ -1,12 +1,14 @@
 # ESM-Z
 
-**ESM-Z — Enshrouded Server Manager by Zat** is a Windows-friendly web manager for running one or more Enshrouded dedicated server instances from a browser.
+**ESM-Z - Enshrouded Server Manager by Zat** is a Windows-friendly web manager for running one or more Enshrouded dedicated server instances from a browser.
 
-The current release supports Windows hosts. Linux host support is designed but not yet implemented; see the linked architecture analysis before planning a Linux deployment.
+The stable release supports Windows hosts. Experimental Linux support is available separately through the `v0.10.0-linux-alpha.3` prerelease and is not production-ready.
 
-Current release: **v0.9.1**
+Current release: **v0.9.2**
 
-Shareable package: [`release/ESM-Z-PythonRequired-v0.9.1.zip`](release/ESM-Z-PythonRequired-v0.9.1.zip)
+Experimental Linux prerelease: **v0.10.0-linux-alpha.3**
+
+Shareable package: [`release/ESM-Z-PythonRequired-v0.9.2.zip`](release/ESM-Z-PythonRequired-v0.9.2.zip)
 
 ![ESM-Z dashboard](docs/screenshots/dashboard.png)
 
@@ -24,14 +26,14 @@ Shareable package: [`release/ESM-Z-PythonRequired-v0.9.1.zip`](release/ESM-Z-Pyt
 - Imports local player worlds into a dedicated server workflow.
 - Creates local backups and optional FTP backups.
 - Supports multiple Discord or generic JSON webhooks per server for server and manager update events.
-- Checks GitHub releases for ESM-Z updates on an admin-configured interval.
+- Checks GitHub releases for ESM-Z updates on an admin-configured interval, displays an admin notice, and installs an update only after an admin approves it.
 - Includes an in-app Instructions tab and Updates tab.
 
 ## Quick Install
 
 Use the Python-required release if Python 3.11 or newer is already installed on the server.
 
-1. Download [`release/ESM-Z-PythonRequired-v0.9.1.zip`](release/ESM-Z-PythonRequired-v0.9.1.zip).
+1. Download [`release/ESM-Z-PythonRequired-v0.9.2.zip`](release/ESM-Z-PythonRequired-v0.9.2.zip).
 2. Extract it to the machine that will host the manager.
 3. Run `Run ESM-Z.bat`.
 4. Open `http://127.0.0.1:8080` on that machine.

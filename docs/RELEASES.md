@@ -2,23 +2,37 @@
 
 ## Current Release
 
-**v0.9.1** - 2026-09-08
+**v0.9.2** - 2026-10-16
 
 Package:
 
 ```text
-release/ESM-Z-PythonRequired-v0.9.1.zip
+release/ESM-Z-PythonRequired-v0.9.2.zip
 ```
 
 Changes:
 
-- Renamed the user-facing product to ESM-Z - Enshrouded Server Manager by Zat.
-- Renamed new launchers and release packages to prefer ESM-Z while preserving legacy updater compatibility.
-- Added a repository-specific Linux host support architecture analysis; Linux runtime support is not implemented in this release.
-- Clarified installed versus published update versions and corrected misleading up-to-date results for manually updated files.
-- Moved optional private/custom GitHub credentials into collapsed advanced settings and masked them in manual update API responses.
+- Added an admin update notice and explicit Download & Install action.
+- Removed automatic manager update installation; background checks are notification-only.
+- Added stable and testing release-channel selection, with stable releases selected by default.
+- Added optional SHA-256 verification, package version validation, backup, and rollback protection.
+- Added an installed-pending-restart state while keeping running game servers independent from the manager restart.
+
+## Experimental Linux Prerelease
+
+**v0.10.0-linux-alpha.3** - 2026-10-16
+
+Linux host support remains experimental and is distributed separately from the stable Windows package. See the GitHub prerelease and `codex/linux-alpha` branch for Linux packages and test instructions.
 
 ## Version History
+
+### v0.9.1 - 2026-09-08
+
+- Renamed the user-facing product to ESM-Z - Enshrouded Server Manager by Zat.
+- Renamed new launchers and release packages to prefer ESM-Z while preserving legacy updater compatibility.
+- Added a repository-specific Linux host support architecture analysis without changing Windows runtime behavior.
+- Clarified installed versus published update versions and corrected misleading up-to-date results for manually updated files.
+- Moved optional private/custom GitHub credentials into collapsed advanced settings and masked them in manual update API responses.
 
 ### v0.9.0 - 2026-09-08
 

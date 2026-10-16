@@ -17,6 +17,7 @@ Included features:
 - Start, stop, restart, and update-check the Enshrouded dedicated server.
 - Manage multiple Enshrouded dedicated server instances from one UI.
 - Review manager version history and update notes from the Updates tab.
+- Receive an admin notice for compatible GitHub releases and install an update with an explicit admin click.
 - Generate account invite codes with optional titles and descriptions for admin tracking.
 - Remove server instances from the manager registry without deleting server files.
 - Monitor each persistent server process and restart it after crashes unless it was stopped from the UI.
@@ -29,6 +30,6 @@ Included features:
 - Build a smaller zip for machines that already have Python using `enshrouded_manager\build_python_required_release.ps1`.
 - Build an exe with `enshrouded_manager\build_exe.ps1` after installing PyInstaller.
 
-The Python-required release script updates the latest zip in `dist` and also keeps a copy in `dist\versions` named with the manager version. Running servers are launched as detached processes and are not intentionally stopped when the manager exits, so updating the manager does not require restarting every game server.
+The Python-required release script updates the latest zip in `dist` and also keeps a copy in `dist\versions` named with the manager version. Manager update checks are notification-only until an admin clicks Download & Install Update. The updater preserves `data`, backs up the current files, and asks for a manager restart after installation. Running servers are launched as detached processes and are not intentionally stopped when the manager exits, so updating the manager does not require restarting every game server.
 
 Only open the configured manager TCP port in Windows Firewall if you intentionally want to reach the UI from another machine.
