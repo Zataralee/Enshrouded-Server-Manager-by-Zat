@@ -2,17 +2,22 @@
 
 ## Current Release
 
-**v0.9.3** - 2026-10-16
+**v0.9.4** - 2026-10-16
 
-Package: download `ESM-Z-PythonRequired-v0.9.3.zip` from the [GitHub release](https://github.com/Zataralee/Enshrouded-Server-Manager-by-Zat/releases/tag/v0.9.3).
+Package: download `ESM-Z-PythonRequired-v0.9.4.zip` from the [GitHub release](https://github.com/Zataralee/Enshrouded-Server-Manager-by-Zat/releases/tag/v0.9.4).
 
 Changes:
 
-- Failed update-before-start checks now show a warning and continue by launching the existing server installation.
-- Added a server update failed webhook event for failed SteamCMD checks.
-- Added the running ESM-Z version to the persistent header on every manager page.
+- Automatically backs up the selected instance's Steam manifests and retries once after the known Enshrouded `0x6` update failure.
+- Runs SteamCMD installs and updates one at a time and rejects manual updates of running servers.
+- Saves SteamCMD progress in the selected server's Logs tab and requires app-specific success confirmation.
 
 ## Experimental Prerelease
+
+**v0.10.0-linux-alpha.5** - 2026-10-16
+
+- Added the same scoped Steam manifest recovery, serialized update jobs, and per-server SteamCMD logs as stable v0.9.4.
+- Retained Linux Windows-depot selection and Wine/Proton runtime behavior.
 
 **v0.10.0-linux-alpha.4** - 2026-10-16
 
@@ -47,6 +52,11 @@ Changes:
 - This prerelease does not provide systemd services and is not production Linux support.
 
 ## Version History
+
+### v0.9.3 - 2026-10-16
+
+- Failed pre-start update checks display a warning and continue by launching the existing server installation.
+- Added the server update failed webhook event and the running ESM-Z version in the header.
 
 ### v0.9.2 - 2026-10-16
 

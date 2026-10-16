@@ -56,12 +56,7 @@ class ServerStartRecoveryTests(unittest.TestCase):
                 self.assertIn("SteamCMD exited with code 8", saved["last_update_warning"])
                 self.assertEqual("idle", supervisor.status()["activity"])
                 self.assertTrue(popen.called)
-                notify.assert_any_call(
-                    "server.update.failed",
-                    instance["id"],
-                    message="Update check failed for Update Failure; starting the existing installation.",
-                    details={"error": "SteamCMD exited with code 8"},
-                )
+                notify.assert_called_once_with("server.started", instance["id"], message="Update Failure started.")
             finally:
                 manager.DATA_DIR, manager.MANAGER_CONFIG, manager.MANAGER_LOG = original
 
