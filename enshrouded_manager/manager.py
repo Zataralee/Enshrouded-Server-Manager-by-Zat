@@ -26,8 +26,17 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 
-APP_VERSION = "0.9.5"
+APP_VERSION = "0.9.6"
 UPDATE_LOG = [
+    {
+        "version": "0.9.6",
+        "date": "2026-10-19",
+        "changes": [
+            "Fixed fresh-install Missing configuration failures by loading Enshrouded's Steam app metadata before installing or updating.",
+            "Added one bounded retry for Enshrouded metadata failures and included Steam content and app-info diagnostics in server logs.",
+            "Stopped saves and backups polling without a selected server and cleared stale browser instance selections.",
+        ],
+    },
     {
         "version": "0.9.5",
         "date": "2026-10-19",
@@ -2712,13 +2721,16 @@ class SteamCMDUpdateError(subprocess.CalledProcessError):
 
 
 def steamcmd_update_command(exe, target_dir):
+    # A fresh anonymous session can reach app_update before this app's metadata is loaded.
     return [str(exe), "+force_install_dir", str(target_dir), "+login", "anonymous",
+            "+app_info_update", "1", "+app_info_print", APP_ID,
             "+app_update", APP_ID, "validate", "+quit"]
 
 
 def steamcmd_execute(command, log_path, stage="update", timeout=None):
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    sources = [Path(command[0]).parent / "logs" / name for name in ("bootstrap_log.txt", "stderr.txt")]
+    sources = [Path(command[0]).parent / "logs" / name for name in
+               ("bootstrap_log.txt", "stderr.txt", "content_log.txt", "appinfo_log.txt")]
     previous = {}
     for path in sources:
         if path.is_file():
@@ -2784,13 +2796,19 @@ def steamcmd_update_after_bootstrap(command, log_path, status=None):
     try:
         steamcmd_update_attempt(command, log_path)
     except SteamCMDUpdateError as exc:
-        if exc.returncode != 7:
+        missing_config = re.search(
+            rf"Failed to install app\s+'{APP_ID}'\s+\(Missing configuration\)",
+            exc.output or "", re.IGNORECASE)
+        if exc.returncode != 7 and not missing_config:
             raise
-        message = "SteamCMD exited during its self-update; reinitializing it and retrying the game install once"
+        message = ("SteamCMD could not load Enshrouded's app metadata; refreshing it and retrying the install once"
+                   if missing_config else
+                   "SteamCMD exited during its self-update; reinitializing it and retrying the game install once")
         write_log(message)
         if status:
             status(message)
-        prepare_steamcmd(Path(command[0]), log_path, status=status)
+        if not missing_config:
+            prepare_steamcmd(Path(command[0]), log_path, status=status)
         steamcmd_update_attempt(command, log_path)
 
 

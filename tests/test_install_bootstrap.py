@@ -124,6 +124,45 @@ class InstallBootstrapTests(unittest.TestCase):
             manager.steamcmd_update_after_bootstrap(command, self.log)
         self.assertEqual([command, [str(self.exe), "+quit"], command], [call.args[0] for call in process.call_args_list])
 
+    def test_game_command_loads_target_metadata_before_install(self):
+        command = manager.steamcmd_update_command(self.exe, self.root / "server")
+        self.assertLess(command.index("+force_install_dir"), command.index("+login"))
+        self.assertLess(command.index("+login"), command.index("+app_info_update"))
+        self.assertLess(command.index("+app_info_print"), command.index("+app_update"))
+        self.assertEqual(manager.APP_ID, command[command.index("+app_info_print") + 1])
+
+    def test_missing_configuration_retries_with_metadata_once(self):
+        error = "ERROR! Failed to install app '2278520' (Missing configuration)"
+        responses = iter([(error, 8), (SUCCESS, 0)])
+
+        def run(command, **options):
+            return self.response(*next(responses))(command, **options)
+
+        command = manager.steamcmd_update_command(self.exe, self.root / "server")
+        status = mock.Mock()
+        with mock.patch.object(manager.subprocess, "run", side_effect=run) as process:
+            manager.steamcmd_update_after_bootstrap(command, self.log, status=status)
+        self.assertEqual([command, command], [call.args[0] for call in process.call_args_list])
+        self.assertIn("app metadata", status.call_args.args[0])
+
+    def test_missing_configuration_retry_is_bounded(self):
+        error = "ERROR! Failed to install app '2278520' (Missing configuration)"
+        command = manager.steamcmd_update_command(self.exe, self.root / "server")
+        with mock.patch.object(manager.subprocess, "run", side_effect=self.response(error, 8)) as process:
+            with self.assertRaisesRegex(manager.SteamCMDUpdateError, "Missing configuration"):
+                manager.steamcmd_update_after_bootstrap(command, self.log)
+        self.assertEqual(2, process.call_count)
+
+    def test_unrelated_failure_does_not_trigger_metadata_retry(self):
+        command = manager.steamcmd_update_command(self.exe, self.root / "server")
+        for error in ("ERROR! Failed to install app '123' (Missing configuration)",
+                      "ERROR! Failed to install app '2278520' (No subscription)"):
+            with self.subTest(error=error), \
+                    mock.patch.object(manager.subprocess, "run", side_effect=self.response(error, 8)) as process:
+                with self.assertRaises(manager.SteamCMDUpdateError):
+                    manager.steamcmd_update_after_bootstrap(command, self.log)
+                self.assertEqual(1, process.call_count)
+
     def test_fresh_server_install_bootstraps_before_game_download(self):
         responses = iter([(LOCALIZE, 7), (READY, 0), (SUCCESS, 0)])
 

@@ -2,29 +2,36 @@
 
 ## Current Release
 
-**v0.9.5** - 2026-10-19
+**v0.9.6** - 2026-10-19
 
 Package:
 
 ```text
-release/ESM-Z-PythonRequired-v0.9.5.zip
+release/ESM-Z-PythonRequired-v0.9.6.zip
 ```
 
 Changes:
+
+- Loads Enshrouded's Steam app metadata before installing/updating, fixing a reproduced first-install `Missing configuration` failure on Windows.
+- Retries this specific metadata failure once without deleting the Steam cache, server files, saves, or configuration.
+- Includes current Steam content and app-info diagnostics in the selected server's SteamCMD log.
+- Stops save/backup polling when no server is selected and clears stale browser instance selections.
+
+## Experimental Linux Prerelease
+
+**v0.10.0-linux-alpha.7** - 2026-10-19
+
+Linux host support remains experimental and is distributed separately from the stable Windows package. See the GitHub prerelease and `codex/linux-alpha` branch for Linux packages and test instructions.
+
+## Version History
+
+### v0.9.5 - 2026-10-19
 
 - Initializes SteamCMD before downloading the game and retries the first-run self-update exit code 7.
 - Captures current bootstrap diagnostics and prioritizes actionable errors over the localization warning.
 - Adds Retry Install for failed or interrupted installs, preserving the instance, directory, and query port without consuming another server allocation.
 - Registers install instances immediately and prevents duplicate install jobs for an instance.
 - Suppresses successful background API polling from the console; errors and user actions are still logged.
-
-## Experimental Linux Prerelease
-
-**v0.10.0-linux-alpha.6** - 2026-10-19
-
-Linux host support remains experimental and is distributed separately from the stable Windows package. See the GitHub prerelease and `codex/linux-alpha` branch for Linux packages and test instructions.
-
-## Version History
 
 ### v0.9.4 - 2026-10-16
 
