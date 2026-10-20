@@ -1,5 +1,19 @@
 # SteamCMD Update Recovery
 
+## First Install: Exit Code 7
+
+ESM-Z v0.9.5 and Linux alpha.6 initialize SteamCMD with `+quit` before sending the game installation command. SteamCMD's initial download contains a bootstrap executable; its first launch downloads and replaces SteamCMD itself and can return exit code 7. This was reproduced on a clean Windows SteamCMD download on 2026-10-19: the first run printed the localization warning, updated the client, and returned 7; the second run reached the console client and returned 0.
+
+The `ILocalize::AddFile()` message about `public/steambootstrapper_english.txt` can be a first-run warning rather than the cause of a failed game installation. Valve's [Steamworks documentation](https://partner.steamgames.com/doc/sdk/uploading?language=english) recommends running SteamCMD once to bootstrap it. A separate server tool also [reported premature server launches after SteamCMD's self-update](https://github.com/soda3x/ArmaReforgerServerTool/issues/248).
+
+ESM-Z now shows an initialization stage, allows up to three initialization launches with a three-minute timeout per launch, and requires the client and Steam API to report ready with a successful exit before continuing. If a game install still exits with code 7, ESM-Z reinitializes SteamCMD and retries that game command once. Game installation success must still be explicitly confirmed.
+
+Current additions to SteamCMD's own bootstrap and stderr logs are included in the server's `esm-steamcmd.log`. Error summaries prioritize fatal and operational errors over the localization warning. If an install fails or the manager is interrupted, **Retry Install** reuses the existing instance and directory and keeps its selected query port. A ready server uses the ordinary Update Check instead.
+
+The web UI refreshes status about every five seconds and polls an active install about every 1.5 seconds. These are ordinary GET requests, not new install attempts. Successful background polling is quiet in the console from v0.9.5; failed requests and user actions remain logged.
+
+## Enshrouded State 0x6
+
 ESM-Z v0.9.4 and Linux alpha.5 add automatic recovery for this specific SteamCMD response:
 
 ```text

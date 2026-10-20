@@ -13,7 +13,7 @@ The current shared package does not bundle Python.
 
 ## Download
 
-Download `ESM-Z-PythonRequired-v0.9.4.zip` from the [v0.9.4 GitHub release](https://github.com/Zataralee/Enshrouded-Server-Manager-by-Zat/releases/tag/v0.9.4).
+Download `ESM-Z-PythonRequired-v0.9.5.zip` from the [v0.9.5 GitHub release](https://github.com/Zataralee/Enshrouded-Server-Manager-by-Zat/releases/tag/v0.9.5).
 
 Extract it somewhere permanent, for example:
 
@@ -100,3 +100,5 @@ To update from the UI:
 Game servers should still be visible when the manager comes back up.
 
 For game server updates, stop the selected server and click **Update Check**, or use **Start/Restart** with **Always run update check before start/restart** enabled. SteamCMD progress is saved under that server's **Logs** tab as `esm-steamcmd.log`. ESM-Z backs up the selected server's Steam manifests and retries once if SteamCMD reports the known Enshrouded `0x6` failure. See [SteamCMD Update Recovery](STEAMCMD_RECOVERY.md) for details.
+
+First-time installs initialize and update SteamCMD before downloading the game. If an install fails or is interrupted, use **Retry Install** on the existing instance to reuse its directory and selected query port. Initialization can take additional time on the first run.

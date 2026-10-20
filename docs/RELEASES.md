@@ -2,17 +2,23 @@
 
 ## Current Release
 
-**v0.9.4** - 2026-10-16
+**v0.9.5** - 2026-10-19
 
-Package: download `ESM-Z-PythonRequired-v0.9.4.zip` from the [GitHub release](https://github.com/Zataralee/Enshrouded-Server-Manager-by-Zat/releases/tag/v0.9.4).
+Package: download `ESM-Z-PythonRequired-v0.9.5.zip` from the [GitHub release](https://github.com/Zataralee/Enshrouded-Server-Manager-by-Zat/releases/tag/v0.9.5).
 
 Changes:
 
-- Automatically backs up the selected instance's Steam manifests and retries once after the known Enshrouded `0x6` update failure.
-- Runs SteamCMD installs and updates one at a time and rejects manual updates of running servers.
-- Saves SteamCMD progress in the selected server's Logs tab and requires app-specific success confirmation.
+- Initializes SteamCMD before game downloads and handles its first-run exit code 7 with bounded retries.
+- Captures bootstrap diagnostics and prioritizes fatal errors over the localization warning.
+- Adds Retry Install for failed or interrupted installs, reusing the instance, directory, and query port.
+- Quietly handles successful background API polling while retaining errors and user actions.
 
 ## Experimental Prerelease
+
+**v0.10.0-linux-alpha.6** - 2026-10-19
+
+- Added the same SteamCMD bootstrap handling, install retry workflow, and quiet background polling as stable v0.9.5.
+- Retained Linux Windows-depot selection and Wine/Proton runtime behavior.
 
 **v0.10.0-linux-alpha.5** - 2026-10-16
 
@@ -52,6 +58,10 @@ Changes:
 - This prerelease does not provide systemd services and is not production Linux support.
 
 ## Version History
+
+### v0.9.4 - 2026-10-16
+
+- Added scoped manifest recovery after Enshrouded state 0x6 failures, serialized SteamCMD jobs, and per-server progress logs.
 
 ### v0.9.3 - 2026-10-16
 

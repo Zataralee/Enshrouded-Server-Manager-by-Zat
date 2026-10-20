@@ -1,8 +1,8 @@
 # Current Release
 
-Current stable release: `v0.9.4`
+Current stable release: `v0.9.5`
 
-Download: https://github.com/Zataralee/Enshrouded-Server-Manager-by-Zat/releases/tag/v0.9.4
+Download: https://github.com/Zataralee/Enshrouded-Server-Manager-by-Zat/releases/tag/v0.9.5
 
 The GitHub release includes the primary ESM-Z package and a legacy-named compatibility asset for older self-updaters.
 
@@ -18,6 +18,6 @@ The package includes install notes, user instructions, feature notes, release no
 
 ## Experimental Linux Test
 
-`ESM-Z-Linux-PythonRequired-v0.10.0-linux-alpha.5.tar.gz` is an unsupported test build for Linux hosts. Follow `docs/LINUX_ALPHA.md`; do not use it for production hosting or important worlds without a separate backup.
+`ESM-Z-Linux-PythonRequired-v0.10.0-linux-alpha.6.tar.gz` is an unsupported test build for Linux hosts. Follow `docs/LINUX_ALPHA.md`; do not use it for production hosting or important worlds without a separate backup.
 
-`ESM-Z-PythonRequired-v0.10.0-linux-alpha.5.zip` contains the same alpha manager fixes for Windows test hosts that already have Python 3.11 or newer installed.
+`ESM-Z-PythonRequired-v0.10.0-linux-alpha.6.zip` contains the same alpha manager fixes for Windows test hosts that already have Python 3.11 or newer installed.

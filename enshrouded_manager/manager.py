@@ -27,8 +27,19 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 
-APP_VERSION = "0.10.0-linux-alpha.5"
+APP_VERSION = "0.10.0-linux-alpha.6"
 UPDATE_LOG = [
+    {
+        "version": "0.10.0-linux-alpha.6",
+        "date": "2026-10-19",
+        "changes": [
+            "Initialized SteamCMD separately before game downloads and handled its first-run exit code 7 with bounded retries.",
+            "Included current SteamCMD bootstrap diagnostics in server logs and stopped reporting localization warnings as the main failure.",
+            "Added Retry Install for failed or interrupted installs while reusing the existing instance, directory, and selected port.",
+            "Made new install registration immediately visible and prevented duplicate install jobs for the same instance.",
+            "Quieted successful background API polling in the console while retaining errors and install progress.",
+        ],
+    },
     {
         "version": "0.10.0-linux-alpha.5",
         "date": "2026-10-16",
@@ -1221,7 +1232,7 @@ def visible_jobs_for_user(user):
             if job.get("status") != "running" and updated < cutoff:
                 continue
             jobs.append(dict(job))
-    return sorted(jobs, key=lambda item: item.get("updated_at", ""), reverse=True)
+    return sorted(reversed(jobs), key=lambda item: item.get("updated_at", ""), reverse=True)
 
 
 def get_job_for_user(job_id, user):
@@ -1584,7 +1595,7 @@ def instance_save_path(instance_id=None):
 def instance_query_port(instance_id=None):
     cfg = load_json(instance_config_path(instance_id), {})
     try:
-        return int(cfg.get("queryPort", DEFAULT_QUERY_PORT))
+        return int(cfg.get("queryPort", get_instance(instance_id).get("installation_query_port") or DEFAULT_QUERY_PORT))
     except (TypeError, ValueError):
         return DEFAULT_QUERY_PORT
 
@@ -1930,6 +1941,11 @@ def delete_manager_user(user_id):
 
 def public_instance(inst):
     item = dict(inst)
+    if item.get("installation_status") == "installing":
+        with JOBS_LOCK:
+            active = any(job.get("instance_id") == item["id"] and job.get("status") == "running" for job in JOBS.values())
+        if not active:
+            item["installation_status"] = "failed"
     ftp = dict(item.get("ftp_backup", {}))
     if ftp.get("password"):
         ftp["password"] = "********"
@@ -1944,7 +1960,7 @@ def public_instance(inst):
     item.pop("webhook", None)
     item["installed"] = (Path(inst["path"]) / "enshrouded_server.exe").exists()
     item["config_exists"] = (Path(inst["path"]) / "enshrouded_server.json").exists()
-    item["query_port"] = instance_query_port(inst["id"]) if item["config_exists"] else DEFAULT_QUERY_PORT
+    item["query_port"] = instance_query_port(inst["id"])
     return item
 
 
@@ -2538,35 +2554,41 @@ def ensure_steamcmd(status=None):
     return exe
 
 
-def install_instance(name, install_dir=None, query_port=None, status=None, owner_user_id="", folder_name=None):
-    if not IS_WINDOWS:
-        runtime = host_runtime_info(config())
-        if not runtime["available"]:
-            raise RuntimeError(runtime["message"])
-    target = Path(install_dir) if install_dir else managed_install_path(folder_name or name)
-    target.mkdir(parents=True, exist_ok=True)
-    if status:
-        status(f"Registering instance at {target}")
-    inst = add_instance(name, target, select=True, owner_user_id=owner_user_id)
-    run_update(inst["id"], status=status)
-    cfg_path = instance_config_path(inst["id"])
-    if not cfg_path.exists():
+def install_instance(name, install_dir=None, query_port=None, status=None, owner_user_id="", folder_name=None, instance_id=None):
+    if instance_id:
+        inst = get_instance(instance_id)
+        target = Path(inst["path"])
+        name = inst["name"]
+    else:
+        target = Path(install_dir) if install_dir else managed_install_path(folder_name or name)
+        target.mkdir(parents=True, exist_ok=True)
         if status:
-            status("Creating enshrouded_server.json with selected query port")
-        save_json(cfg_path, default_server_config(name, query_port or DEFAULT_QUERY_PORT))
-    if status:
-        status("Starting server once to validate enshrouded_server.json")
-    generate_initial_server_config(inst["id"], status=status)
-    if cfg_path.exists():
-        cfg = load_json(cfg_path, {})
-        if query_port:
-            cfg["queryPort"] = int(query_port)
-        cfg.setdefault("name", name)
-        save_json(cfg_path, cfg)
+            status(f"Registering instance at {target}")
+        inst = add_instance(name, target, select=True, owner_user_id=owner_user_id)
+    update_instance_metadata(inst["id"], installation_status="installing", installation_query_port=query_port or DEFAULT_QUERY_PORT)
+    try:
+        run_update(inst["id"], status=status)
+        cfg_path = instance_config_path(inst["id"])
+        if not cfg_path.exists():
+            if status:
+                status("Creating enshrouded_server.json with selected query port")
+            save_json(cfg_path, default_server_config(name, query_port or DEFAULT_QUERY_PORT))
         if status:
-            status("enshrouded_server.json created; server is ready for configuration")
-    write_log(f"Installed Enshrouded dedicated server instance {name} at {target}")
-    return inst
+            status("Starting server once to validate enshrouded_server.json")
+        generate_initial_server_config(inst["id"], status=status)
+        if cfg_path.exists():
+            cfg = load_json(cfg_path, {})
+            if query_port:
+                cfg["queryPort"] = int(query_port)
+            cfg.setdefault("name", name)
+            save_json(cfg_path, cfg)
+            if status:
+                status("enshrouded_server.json created; server is ready for configuration")
+        write_log(f"Installed Enshrouded dedicated server instance {name} at {target}")
+        return update_instance_metadata(inst["id"], installation_status="ready")
+    except Exception:
+        update_instance_metadata(inst["id"], installation_status="failed")
+        raise
 
 
 def save_server_config(server_config, instance_id=None, restart_if_running=False, public_server=None):
@@ -3007,12 +3029,23 @@ def test_webhook(instance_id, webhook_id):
 
 
 class SteamCMDUpdateError(subprocess.CalledProcessError):
+    def __init__(self, returncode, cmd, output=None, stage="update"):
+        super().__init__(returncode, cmd, output=output)
+        self.stage = stage
+
     def __str__(self):
         lines = (self.output or "").splitlines()
-        errors = [line.strip() for line in lines if re.search(r"error!|failed to", line, re.IGNORECASE)]
-        detail = f" {errors[-1][:400]}" if errors else ""
-        result = (f"SteamCMD exited with code {self.returncode}." if self.returncode
-                  else "SteamCMD did not confirm a successful install/update.")
+        errors = [line.strip() for line in lines
+                  if re.search(r"error!|error:|failed to|not writable|access.*denied", line, re.IGNORECASE)
+                  and "ilocalize::addfile" not in line.lower()]
+        fatal = [line for line in errors if re.search(r"fatal|error!|error:|not writable|access.*denied", line, re.IGNORECASE)]
+        detail = f" {(fatal or errors)[-1][:400]}" if errors else ""
+        if self.stage == "bootstrap":
+            result = f"SteamCMD initialization failed (exit code {self.returncode})."
+            detail += " Check Steam connectivity and write permissions in the Steamcmd folder."
+        else:
+            result = (f"SteamCMD exited with code {self.returncode}." if self.returncode
+                      else "SteamCMD did not confirm a successful install/update.")
         return f"{result}{detail} See Logs > esm-steamcmd.log for details."
 
 
@@ -3030,21 +3063,82 @@ def steamcmd_update_command(exe, target_dir):
     return command
 
 
-def steamcmd_update_attempt(command, log_path):
+def steamcmd_execute(command, log_path, stage="update", timeout=None):
     log_path.parent.mkdir(parents=True, exist_ok=True)
+    sources = [Path(command[0]).parent / "logs" / name for name in ("bootstrap_log.txt", "stderr.txt")]
+    previous = {}
+    for path in sources:
+        if path.is_file():
+            info = path.stat()
+            previous[path] = (info.st_ino, info.st_size, info.st_mtime_ns)
     # Redirect directly to disk so progress is readable while SteamCMD is running.
     with log_path.open("ab") as output:
-        output.write(f"\n[{now_iso()}] SteamCMD update attempt\n".encode("utf-8"))
+        output.write(f"\n[{now_iso()}] SteamCMD {stage} attempt\n".encode("utf-8"))
         output.flush()
         offset = output.tell()
-        result = subprocess.run(command, cwd=str(Path(command[0]).parent),
-                                stdout=output, stderr=subprocess.STDOUT, check=False)
+        try:
+            result = subprocess.run(command, cwd=str(Path(command[0]).parent), stdin=subprocess.DEVNULL,
+                                    stdout=output, stderr=subprocess.STDOUT, check=False, timeout=timeout)
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(f"SteamCMD {stage} timed out after {timeout} seconds. See Logs > esm-steamcmd.log.") from exc
     with log_path.open("rb") as output:
         output.seek(max(offset, log_path.stat().st_size - 32768))
         tail = output.read().decode("utf-8", errors="replace")
+    for path in sources:
+        if not path.is_file():
+            continue
+        info = path.stat()
+        before = previous.get(path)
+        if before == (info.st_ino, info.st_size, info.st_mtime_ns):
+            continue
+        start = before[1] if before and before[0] == info.st_ino and info.st_size >= before[1] else 0
+        with path.open("rb") as source:
+            source.seek(max(start, info.st_size - 16384))
+            text = source.read(16384).decode("utf-8", errors="replace")
+        diagnostic = f"\n--- SteamCMD {path.name} ({stage}) ---\n{text}"
+        with log_path.open("ab") as output:
+            output.write(diagnostic.encode("utf-8"))
+        tail += diagnostic
+    return result.returncode, tail
+
+
+def prepare_steamcmd(exe, log_path, status=None):
+    command = [str(exe), "+quit"]
+    for attempt in range(3):
+        message = f"Initializing SteamCMD ({attempt + 1}/3); SteamCMD may download its own updates before the game"
+        write_log(message)
+        if status:
+            status(message)
+        code, output = steamcmd_execute(command, log_path, stage="bootstrap", timeout=180)
+        ready = "Steam Console Client" in output and re.search(r"Loading Steam API\.\.\..*?\bOK\b", output, re.DOTALL)
+        if code == 0 and ready:
+            return
+        error = SteamCMDUpdateError(code, command, output=output, stage="bootstrap")
+        if attempt == 2 or code not in {0, 7}:
+            raise error
+        write_log("SteamCMD initialization requested another launch; retrying initialization")
+        time.sleep(1)
+
+
+def steamcmd_update_attempt(command, log_path):
+    code, tail = steamcmd_execute(command, log_path)
     success = re.search(rf"Success!\s+App\s+'{APP_ID}'\s+(?:fully installed|already up to date)", tail, re.IGNORECASE)
-    if result.returncode or not success:
-        raise SteamCMDUpdateError(result.returncode, command, output=tail)
+    if code or not success:
+        raise SteamCMDUpdateError(code, command, output=tail)
+
+
+def steamcmd_update_after_bootstrap(command, log_path, status=None):
+    try:
+        steamcmd_update_attempt(command, log_path)
+    except SteamCMDUpdateError as exc:
+        if exc.returncode != 7:
+            raise
+        message = "SteamCMD exited during its self-update; reinitializing it and retrying the game install once"
+        write_log(message)
+        if status:
+            status(message)
+        prepare_steamcmd(Path(command[0]), log_path, status=status)
+        steamcmd_update_attempt(command, log_path)
 
 
 def reset_instance_steam_manifests(instance_id):
@@ -3086,12 +3180,13 @@ def run_update(instance_id=None, status=None):
             exe = ensure_steamcmd(status=status)
             target_dir = instance_path(inst["id"])
             log_path = safe_child(target_dir, target_dir / "logs" / "esm-steamcmd.log")
+            prepare_steamcmd(exe, log_path, status=status)
             command = steamcmd_update_command(exe, target_dir)
             write_log(f"Running SteamCMD app_update {APP_ID} validate for {inst['name']}; output: {log_path}")
             if status:
                 status("Installing/updating Enshrouded Dedicated Server; progress is in Logs > esm-steamcmd.log")
             try:
-                steamcmd_update_attempt(command, log_path)
+                steamcmd_update_after_bootstrap(command, log_path, status=status)
             except SteamCMDUpdateError as exc:
                 stuck_state = re.search(rf"App\s+'{APP_ID}'\s+state is\s+0x6\s+after update job", exc.output or "", re.IGNORECASE)
                 if not stuck_state:
@@ -3157,19 +3252,49 @@ def generate_initial_server_config(instance_id, status=None, timeout_seconds=180
     raise TimeoutError("Timed out waiting for enshrouded_server.json to be created")
 
 
-def start_install_job(body, user):
-    check_server_creation_allowed(user)
-    query_port = int(body.get("queryPort") or DEFAULT_QUERY_PORT)
-    if query_port in {instance_query_port(inst["id"]) for inst in instances()}:
-        raise ValueError("Port in use. Select a new port")
-    job_id = new_job(
-        "install_instance",
-        owner_user_id=user.get("id", ""),
-        owner_username=user.get("username", ""),
-        instance_name=body.get("name") or body.get("folder_name") or "Enshrouded Server",
-        folder_name=body.get("folder_name") or "",
-        query_port=query_port,
-    )
+def start_install_job(body, user, retry_instance_id=None):
+    if retry_instance_id:
+        candidate = get_instance_for_user(user, retry_instance_id)
+        if candidate["id"] != retry_instance_id:
+            raise PermissionError("This server is not assigned to your account.")
+        if supervisor(candidate["id"]).status().get("running"):
+            raise ValueError("Stop this server before retrying its install.")
+    with CONFIG_LOCK:
+        if retry_instance_id:
+            inst = get_instance_for_user(user, retry_instance_id)
+            if inst["id"] != retry_instance_id:
+                raise PermissionError("This server is not assigned to your account.")
+            with JOBS_LOCK:
+                if any(job.get("instance_id") == inst["id"] and job.get("status") == "running" for job in JOBS.values()):
+                    raise ValueError("This server already has an install in progress.")
+            if inst.get("installation_status") not in {"failed", "installing"} and instance_exe_path(inst["id"]).exists():
+                raise ValueError("This server is already installed. Use Update Check instead.")
+            query_port = (instance_query_port(inst["id"]) if instance_config_path(inst["id"]).exists()
+                          else int(inst.get("installation_query_port") or DEFAULT_QUERY_PORT))
+        else:
+            check_server_creation_allowed(user)
+            inst = None
+            query_port = int(body.get("queryPort") or DEFAULT_QUERY_PORT)
+        if query_port < 1 or query_port > 65535:
+            raise ValueError("Query port must be between 1 and 65535")
+        if any(instance_query_port(item["id"]) == query_port for item in instances() if not inst or item["id"] != inst["id"]):
+            raise ValueError("Port in use. Select a new port")
+        if inst is None:
+            name = body.get("name") or body.get("folder_name") or "Enshrouded Server"
+            target = Path(body["path"]) if body.get("path") else managed_install_path(body.get("folder_name") or name)
+            if any(Path(item["path"]).resolve() == target.resolve() for item in instances()):
+                raise ValueError("This directory is already registered. Use Retry Install for that instance.")
+            inst = add_instance(name, target, select=True, owner_user_id=user.get("id", ""))
+        update_instance_metadata(inst["id"], installation_status="installing", installation_query_port=query_port)
+        job_id = new_job(
+            "install_instance",
+            owner_user_id=user.get("id", ""),
+            owner_username=user.get("username", ""),
+            instance_id=inst["id"],
+            instance_name=inst["name"],
+            folder_name=body.get("folder_name") or "",
+            query_port=query_port,
+        )
     def runner():
         try:
             def status(message):
@@ -3177,12 +3302,10 @@ def start_install_job(body, user):
                 write_log(f"Install job {job_id}: {message}")
 
             inst = install_instance(
-                body.get("name") or "Enshrouded Server",
-                body.get("path") or None,
-                query_port,
+                get_job(job_id)["instance_name"],
+                query_port=query_port,
                 status=status,
-                owner_user_id=user.get("id", ""),
-                folder_name=body.get("folder_name"),
+                instance_id=get_job(job_id)["instance_id"],
             )
             update_job(
                 job_id,
@@ -3731,6 +3854,12 @@ def parse_uploaded_file(headers, stream):
 class Handler(SimpleHTTPRequestHandler):
     server_version = "EnshroudedManager/0.1"
 
+    def log_request(self, code="-", size="-"):
+        polling_routes = {"/api/status", "/api/jobs", "/api/log", "/api/backups", "/api/savegame/imports"}
+        if self.command == "GET" and str(code) == "200" and urlparse(self.path).path in polling_routes:
+            return
+        super().log_request(code, size)
+
     def translate_path(self, path):
         route = urlparse(path).path
         if route == "/":
@@ -3913,6 +4042,12 @@ class Handler(SimpleHTTPRequestHandler):
                     return
                 body = self.json_body()
                 job_id = start_install_job(body, self.current_user())
+                return self.send_json({"ok": True, "job_id": job_id})
+            if route == "/api/instances/retry-install":
+                if not self.require_perm("setup"):
+                    return
+                body = self.json_body()
+                job_id = start_install_job({}, self.current_user(), retry_instance_id=body["instance_id"])
                 return self.send_json({"ok": True, "job_id": job_id})
             if route == "/api/instances/select":
                 inst = get_instance_for_user(self.current_user(), self.json_body()["instance_id"])
