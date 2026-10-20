@@ -4,11 +4,11 @@
 
 The stable release supports Windows hosts. Experimental Linux compatibility work is available only on the `codex/linux-alpha` branch and must not be treated as production Linux support.
 
-Current stable release: **v0.9.5**
+Current stable release: **v0.9.6**
 
-Experimental prerelease: **v0.10.0-linux-alpha.6**
+Experimental prerelease: **v0.10.0-linux-alpha.7**
 
-Stable download: [ESM-Z v0.9.5](https://github.com/Zataralee/Enshrouded-Server-Manager-by-Zat/releases/tag/v0.9.5)
+Stable download: [ESM-Z v0.9.6](https://github.com/Zataralee/Enshrouded-Server-Manager-by-Zat/releases/tag/v0.9.6)
 
 ![ESM-Z dashboard](docs/screenshots/dashboard.png)
 
@@ -33,7 +33,7 @@ Stable download: [ESM-Z v0.9.5](https://github.com/Zataralee/Enshrouded-Server-M
 
 Use the Python-required release if Python 3.11 or newer is already installed on the server.
 
-1. Download `ESM-Z-PythonRequired-v0.9.5.zip` from the [v0.9.5 release](https://github.com/Zataralee/Enshrouded-Server-Manager-by-Zat/releases/tag/v0.9.5).
+1. Download `ESM-Z-PythonRequired-v0.9.6.zip` from the [v0.9.6 release](https://github.com/Zataralee/Enshrouded-Server-Manager-by-Zat/releases/tag/v0.9.6).
 2. Extract it to the machine that will host the manager.
 3. Run `Run ESM-Z.bat`.
 4. Open `http://127.0.0.1:8080` on that machine.

@@ -19,7 +19,10 @@ class LinuxRuntimeTests(unittest.TestCase):
 
         self.assertIn("+@sSteamCmdForcePlatformType", command)
         self.assertEqual(command[command.index("+@sSteamCmdForcePlatformType") + 1], "windows")
+        self.assertLess(command.index("+@sSteamCmdForcePlatformType"), command.index("+login"))
         self.assertLess(command.index("+force_install_dir"), command.index("+login"))
+        self.assertLess(command.index("+login"), command.index("+app_info_print"))
+        self.assertLess(command.index("+app_info_print"), command.index("+app_update"))
 
     def test_windows_steamcmd_command_remains_unchanged(self):
         with mock.patch.object(manager, "IS_WINDOWS", True):

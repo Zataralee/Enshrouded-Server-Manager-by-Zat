@@ -2,18 +2,24 @@
 
 ## Current Release
 
-**v0.9.5** - 2026-10-19
+**v0.9.6** - 2026-10-19
 
-Package: download `ESM-Z-PythonRequired-v0.9.5.zip` from the [GitHub release](https://github.com/Zataralee/Enshrouded-Server-Manager-by-Zat/releases/tag/v0.9.5).
+Package: download `ESM-Z-PythonRequired-v0.9.6.zip` from the [GitHub release](https://github.com/Zataralee/Enshrouded-Server-Manager-by-Zat/releases/tag/v0.9.6).
 
 Changes:
 
-- Initializes SteamCMD before game downloads and handles its first-run exit code 7 with bounded retries.
-- Captures bootstrap diagnostics and prioritizes fatal errors over the localization warning.
-- Adds Retry Install for failed or interrupted installs, reusing the instance, directory, and query port.
-- Quietly handles successful background API polling while retaining errors and user actions.
+- Loads Enshrouded's Steam app metadata before installing/updating, fixing a reproduced first-install `Missing configuration` failure on Windows.
+- Retries this metadata failure once and includes current Steam content and app-info diagnostics in the server log.
+- Stops save/backup polling without a selected server and clears stale browser selections.
 
 ## Experimental Prerelease
+
+**v0.10.0-linux-alpha.7** - 2026-10-19
+
+- Added the metadata-first installation and bounded retry from stable v0.9.6.
+- Moved the Linux Windows-depot platform override before Steam login, addressing an upstream fresh-install failure.
+- Stopped save/backup polling before an instance exists and added Steam content/app-info diagnostics.
+- Linux host support remains experimental; full installation was verified on Windows, not on a Linux host.
 
 **v0.10.0-linux-alpha.6** - 2026-10-19
 
@@ -58,6 +64,14 @@ Changes:
 - This prerelease does not provide systemd services and is not production Linux support.
 
 ## Version History
+
+### v0.9.5 - 2026-10-19
+
+- Initializes SteamCMD before downloading the game and retries the first-run self-update exit code 7.
+- Captures current bootstrap diagnostics and prioritizes actionable errors over the localization warning.
+- Adds Retry Install for failed or interrupted installs, preserving the instance, directory, and query port without consuming another server allocation.
+- Registers install instances immediately and prevents duplicate install jobs for an instance.
+- Suppresses successful background API polling from the console; errors and user actions are still logged.
 
 ### v0.9.4 - 2026-10-16
 

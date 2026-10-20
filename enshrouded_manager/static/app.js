@@ -495,6 +495,10 @@ function renderLogs() {
 
 async function renderBackups() {
   if (!can("backups")) return;
+  if (!selectedInstance().id) {
+    document.querySelector("#backupList").innerHTML = "";
+    return;
+  }
   const data = await api(`/api/backups?instance_id=${encodeURIComponent(selectedInstanceId() || "")}`);
   document.querySelector("#backupList").innerHTML = data.backups.map(b => `
     <button><span>${b.name}</span><small>${Math.round(b.size / 1024)} KB</small></button>
@@ -519,6 +523,10 @@ function renderDiscoveredSaves() {
 async function renderSaveImports() {
   if (!can("saves")) return;
   const target = document.querySelector("#saveImportHistory");
+  if (!selectedInstance().id) {
+    target.innerHTML = "";
+    return;
+  }
   const data = await api(`/api/savegame/imports?instance_id=${encodeURIComponent(selectedInstanceId() || "")}`);
   target.innerHTML = data.imports.length ? data.imports.map(item => `
     <div class="save-row">
@@ -942,9 +950,11 @@ async function refresh() {
   const suffix = activeInstanceId ? `?instance_id=${encodeURIComponent(activeInstanceId)}` : "";
   const data = await api(`/api/status${suffix}`);
   state = data;
-  if (data.selected_instance && data.selected_instance.id && data.selected_instance.id !== activeInstanceId) {
-    activeInstanceId = data.selected_instance.id;
-    localStorage.setItem("esm_active_instance_id", activeInstanceId);
+  const selectedId = data.selected_instance?.id || "";
+  if (selectedId !== activeInstanceId) {
+    activeInstanceId = selectedId;
+    if (selectedId) localStorage.setItem("esm_active_instance_id", selectedId);
+    else localStorage.removeItem("esm_active_instance_id");
   }
   serverConfig = data.server_config || {};
   renderStatus();

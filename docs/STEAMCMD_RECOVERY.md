@@ -1,5 +1,21 @@
 # SteamCMD Update Recovery
 
+## First Install: Missing Configuration
+
+ESM-Z v0.9.6 and Linux alpha.7 explicitly fetch and print Enshrouded's app metadata after anonymous login and before `app_update`:
+
+```text
++force_install_dir <server directory> +login anonymous +app_info_update 1 +app_info_print 2278520 +app_update 2278520 validate +quit
+```
+
+This fixes a Windows first-install failure reproduced on 2026-10-19 with SteamCMD client 1791918946. The existing bootstrap completed and anonymous login succeeded, but a fresh-cache install failed with exit code 8 and `Failed to install app '2278520' (Missing configuration)`. An isolated fresh-cache comparison using the explicit metadata step downloaded and validated the complete server successfully, exited 0, and created `enshrouded_server.exe`. No game server was launched during this comparison. The user's matching OneDrive test logs showed successful metadata-cache writes, not a filesystem permission failure; the isolated reproduction was outside OneDrive.
+
+This message refers to Steam's installation metadata, not `enshrouded_server.json`. LinuxGSM maintainers have [requested app-info diagnostics for this class of error](https://github.com/GameServerManagers/LinuxGSM/issues/4937). A separate [Enshrouded Linux report](https://github.com/pterodactyl/game-eggs/issues/657) reproduced the same message when the Windows platform override came after login; the Linux prerelease now sets that override before login. The Windows reproduction does not rely on a platform override.
+
+If Enshrouded still reports this exact metadata failure, ESM-Z repeats the metadata/install command once in a new session. Repeated or unrelated errors still fail visibly. This recovery does not delete caches or server files. Current additions to Steam's `content_log.txt` and `appinfo_log.txt` are also copied into the selected server's `esm-steamcmd.log` for diagnosis.
+
+The UI no longer requests backups or save-import history when status reports no selected instance, and removes a stale instance ID from browser storage. This prevents unrelated startup `500` errors before the first server is added.
+
 ## First Install: Exit Code 7
 
 ESM-Z v0.9.5 and Linux alpha.6 initialize SteamCMD with `+quit` before sending the game installation command. SteamCMD's initial download contains a bootstrap executable; its first launch downloads and replaces SteamCMD itself and can return exit code 7. This was reproduced on a clean Windows SteamCMD download on 2026-10-19: the first run printed the localization warning, updated the client, and returned 7; the second run reached the console client and returned 0.
