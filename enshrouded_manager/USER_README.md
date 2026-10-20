@@ -6,6 +6,8 @@ If you do not see a tab or button mentioned here, your account probably does not
 
 The manager also has an `Instructions` tab. It shows guidance for the tabs and features your account can access.
 
+If a new server install fails or is interrupted, use `Retry Install` on that instance under `Server Setup & Config` > `Setup & Instances`. It keeps the existing instance and directory. SteamCMD updates itself before the game download, so the initialization stage can take additional time on the first install.
+
 The `Updates` tab shows the current manager version and a short history of what changed in recent releases.
 
 ## Signing In

@@ -2,28 +2,34 @@
 
 ## Current Release
 
-**v0.9.4** - 2026-10-16
+**v0.9.5** - 2026-10-19
 
 Package:
 
 ```text
-release/ESM-Z-PythonRequired-v0.9.4.zip
+release/ESM-Z-PythonRequired-v0.9.5.zip
 ```
 
 Changes:
 
-- Automatically backs up the selected instance's Steam manifests and retries once after the known Enshrouded `0x6` update failure.
-- Runs SteamCMD installs and updates one at a time and rejects manual updates of running servers.
-- Saves SteamCMD progress to the server's `logs/esm-steamcmd.log` and displays the actual Steam error on failure.
-- Requires both a successful process exit and SteamCMD's app-specific success confirmation before recording a successful update.
+- Initializes SteamCMD before downloading the game and retries the first-run self-update exit code 7.
+- Captures current bootstrap diagnostics and prioritizes actionable errors over the localization warning.
+- Adds Retry Install for failed or interrupted installs, preserving the instance, directory, and query port without consuming another server allocation.
+- Registers install instances immediately and prevents duplicate install jobs for an instance.
+- Suppresses successful background API polling from the console; errors and user actions are still logged.
 
 ## Experimental Linux Prerelease
 
-**v0.10.0-linux-alpha.5** - 2026-10-16
+**v0.10.0-linux-alpha.6** - 2026-10-19
 
 Linux host support remains experimental and is distributed separately from the stable Windows package. See the GitHub prerelease and `codex/linux-alpha` branch for Linux packages and test instructions.
 
 ## Version History
+
+### v0.9.4 - 2026-10-16
+
+- Added automatic backup and one-time recovery of the selected server's Steam manifests after Enshrouded state 0x6 failures.
+- Serialized SteamCMD jobs and added per-server progress logs and explicit install-success checks.
 
 ### v0.9.3 - 2026-10-16
 

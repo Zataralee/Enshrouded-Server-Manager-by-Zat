@@ -35,6 +35,7 @@ class SteamCMDRecoveryTests(unittest.TestCase):
         self.exe = self.root / "Steamcmd" / "steamcmd.exe"
         self.exe.parent.mkdir()
         self.ensure = mock.patch.object(manager, "ensure_steamcmd", return_value=self.exe).start()
+        mock.patch.object(manager, "prepare_steamcmd").start()
         self.notify = mock.patch.object(manager, "notify_webhook_event").start()
         self.addCleanup(mock.patch.stopall)
         self.addCleanup(self.restore_paths)

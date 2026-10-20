@@ -67,6 +67,7 @@ class ServerUpdateFallbackTests(unittest.TestCase):
         update_error = subprocess.CalledProcessError(8, [str(steamcmd), "+app_update"])
 
         with mock.patch.object(manager, "ensure_steamcmd", return_value=steamcmd), \
+                mock.patch.object(manager, "prepare_steamcmd"), \
                 mock.patch.object(manager, "steamcmd_update_attempt", side_effect=update_error), \
                 mock.patch.object(manager, "notify_webhook_event"):
             with self.assertRaises(subprocess.CalledProcessError):
@@ -79,6 +80,7 @@ class ServerUpdateFallbackTests(unittest.TestCase):
         steamcmd.write_bytes(b"test executable")
 
         with mock.patch.object(manager, "ensure_steamcmd", return_value=steamcmd), \
+                mock.patch.object(manager, "prepare_steamcmd"), \
                 mock.patch.object(manager, "steamcmd_update_attempt"), \
                 mock.patch.object(manager, "notify_webhook_event"):
             manager.run_update(self.instance_id)

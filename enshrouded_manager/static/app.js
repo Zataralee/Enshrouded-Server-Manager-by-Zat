@@ -380,6 +380,11 @@ function renderSchedules() {
   `).join("");
 }
 
+function canRetryInstall(instance) {
+  return can("setup") && instance && instance.installation_status !== "installing"
+    && (instance.installation_status === "failed" || !instance.installed);
+}
+
 function renderInstances() {
   const firstRun = document.querySelector("#firstRun");
   firstRun.classList.toggle("hidden", !((state.manager || {}).setup_required));
@@ -389,8 +394,9 @@ function renderInstances() {
         <strong>${item.name}</strong>
         <small>${item.path}</small>
       </div>
-      <span>${item.installed ? "Installed" : "Missing server files"}</span>
+      <span>${item.installation_status === "installing" ? "Installing" : item.installation_status === "failed" ? "Install failed" : item.installed ? "Installed" : "Missing server files"}</span>
       <button data-select-instance="${item.id}">Use</button>
+      ${canRetryInstall(item) ? `<button data-retry-install="${item.id}">Retry Install</button>` : ""}
       <button data-remove-instance="${item.id}">Remove</button>
     </div>
   `).join("");
@@ -472,6 +478,7 @@ function renderInstallJobs() {
       <small>${job.updated_at || ""}</small>
       <div class="inline wide">
         ${job.status === "complete" && job.result && job.result.instance ? `<button data-use-installed-instance="${job.result.instance.id}" data-dismiss-job="${job.id}">Use Server</button>` : ""}
+        ${job.status === "failed" && canRetryInstall((state.instances || []).find(item => item.id === job.instance_id)) ? `<button data-retry-install="${job.instance_id}">Retry Install</button>` : ""}
         ${job.status !== "running" ? `<button data-dismiss-job="${job.id}">Dismiss</button>` : ""}
       </div>
     </div>
@@ -843,6 +850,7 @@ function renderInstructions() {
       <p>Use Existing Install when the server files already exist on this hosting machine. The folder must contain enshrouded_server.exe.</p>
       <p>Use Install New Server for a fresh install. Enter an instance name, adjust Directory only if you want a different folder name, and enter a query port only if you do not want the default. The manager checks for duplicate ports before install.</p>
       <p>New installs can take several minutes, sometimes 10-20 minutes on first SteamCMD setup. Click the install button once and watch Install Status.</p>
+      <p>SteamCMD initializes and updates itself before the game download. If an install fails or is interrupted, use Retry Install on the existing instance rather than creating another server.</p>
       <p>Admins can see install jobs from all users. Completed and failed install jobs remain visible for review.</p>
       <p>Removed servers can be restored or permanently deleted from Removed Servers. Deleting files cannot be undone.</p>
     `));
@@ -1118,6 +1126,22 @@ document.addEventListener("click", async event => {
     updateActionDirty = false;
     toast(deleteFiles ? "Instance removed and files deleted" : "Instance removed");
     refresh();
+    return;
+  }
+  if (btn.dataset.retryInstall) {
+    btn.disabled = true;
+    try {
+      const result = await api("/api/instances/retry-install", {
+        method: "POST",
+        body: JSON.stringify({ instance_id: btn.dataset.retryInstall }),
+      });
+      pollInstallJob(result.job_id, btn);
+      toast("Retrying server install");
+      refresh();
+    } catch (err) {
+      btn.disabled = false;
+      toast(err.message);
+    }
     return;
   }
   if (btn.dataset.restoreInstance) {
@@ -1697,6 +1721,7 @@ document.querySelector("#newInstallForm").addEventListener("submit", async event
     const started = await api("/api/instances/install", { method: "POST", body: JSON.stringify(payload) });
     newInstallDirty = false;
     newInstallDirectoryDirty = false;
+    refresh();
     pollInstallJob(started.job_id, button);
   } catch (err) {
     button.disabled = false;

@@ -1,8 +1,8 @@
 # Current Release
 
-Current package: `ESM-Z-PythonRequired-v0.9.4.zip`
+Current package: `ESM-Z-PythonRequired-v0.9.5.zip`
 
-Compatibility asset: `EnshroudedServerManager-PythonRequired-v0.9.4.zip`
+Compatibility asset: `EnshroudedServerManager-PythonRequired-v0.9.5.zip`
 
 Both ZIPs contain the same files. Share the ESM-Z package with new users. The legacy-named asset exists only so v0.9.0 and older self-updaters can find this renamed release.
 

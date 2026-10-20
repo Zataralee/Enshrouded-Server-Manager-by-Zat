@@ -16,7 +16,7 @@ The current shared package does not bundle Python.
 Download the current release package from this repository:
 
 ```text
-release/ESM-Z-PythonRequired-v0.9.4.zip
+release/ESM-Z-PythonRequired-v0.9.5.zip
 ```
 
 Extract it somewhere permanent, for example:
@@ -86,6 +86,8 @@ enshrouded_server.exe
 Use `Install New Server` if you want the manager to download SteamCMD and install a fresh Enshrouded dedicated server instance.
 
 New installs can take several minutes. If SteamCMD has to be downloaded for the first time, or if the host connection is slow, 10-20 minutes or longer is possible. Use the Install Status panel and wait until the server says it is ready for configuration.
+
+The first install initializes and updates SteamCMD itself before downloading Enshrouded. Install Status shows this stage, including any automatic initialization retries. If the install fails, use **Retry Install** on that instance or its failed job; this continues with the existing directory rather than creating a duplicate server. Retry does not consume an additional server allocation. A normal local directory such as `C:\ESM-Z` is preferable to a cloud-synced Desktop folder, although the presence of OneDrive alone does not establish the cause of an install failure.
 
 ## Updating
 
