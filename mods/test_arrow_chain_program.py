@@ -46,6 +46,13 @@ class Program:
                 if op in (11, 21, 22, 23, 24):
                     assert code[pc+1] >> 16 == 0xffff
                     assert (code[pc+1] & 0xffff) < len(self.layout)
+                if op in (22, 24):
+                    entry = self.layout[code[pc+1] & 0xffff]
+                    # Verified against revision 1273043's native VM dispatch.
+                    # A 4-byte struct is NOT automatically a loadable uint32.
+                    assert entry['type']['value'] in (848563180, 2556031774, 3365180733,
+                                                      3756319748, 3902764048), (
+                        'native VM rejects GLoad/GStore type', pc, entry['dbgName'], entry['type']['value'])
                 pc += width
             queue, seen = [(0, 0)], {}
             while queue:
@@ -116,14 +123,18 @@ class VM:
         self.set('CanBeBlocked::value', 1)
 
     def set(self, name, value):
-        self.mem[self.program.names[name]] = value
+        self.write(0xffff0000 + self.program.names[name], value)
 
     def read(self, ptr):
         return None if ptr == 0 else self.mem[ptr & 0xffff]
 
     def write(self, ptr, value):
         if ptr:
-            self.mem[ptr & 0xffff] = value
+            target = self.program.layout[ptr & 0xffff]
+            # The ItemId wrapper and its value alias share bytes at runtime.
+            for i, entry in enumerate(self.program.layout):
+                if entry['offsetInBytes'] == target['offsetInBytes'] and entry['size'] == target['size']:
+                    self.mem[i] = value
 
     def run(self, pc, stops):
         c = self.program.code
@@ -146,6 +157,10 @@ class VM:
                 b, a = self.stack.pop(), self.stack.pop()
                 self.stack.append(int(a < b if op == 5 else a == b))
             elif op == 22:
+                entry = self.program.layout[c[pc] & 0xffff]
+                assert entry['type']['value'] in (848563180, 2556031774, 3365180733,
+                                                  3756319748, 3902764048), (
+                    'native VM rejects GLoad type before damage', entry['dbgName'])
                 self.stack.append(self.read(c[pc])); pc += 1
             elif op == 24:
                 self.write(c[pc], self.stack.pop()); pc += 1

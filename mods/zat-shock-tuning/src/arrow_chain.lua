@@ -78,6 +78,16 @@ function M.plan(settings, api)
     end
     local function uint(name,v) return add(name,848563180,string.pack("<I4",v)) end
     local function float(name,v) return add(name,3902764048,string.pack("<f",v)) end
+    -- GLoad accepts uint32, sint32, float32, bool and Time, NOT the ItemId
+    -- wrapper. Alias its uint32 value at the SAME runtime storage location so
+    -- inherited ammunition config writes remain visible. Copying its zero
+    -- startup value into separate storage would never match a fired arrow.
+    local ammo=layout[(vars["Ammunition::value"] & 0xffff)+1]
+    if ammo.type.value~=1543245243 or ammo.size~=4 then fail("Unexpected ItemId representation") end
+    local ammo_name="ZatArrowChain::ammunition_value"
+    vars.ammunition_value=0xffff0000+#layout
+    layout[#layout+1]={name={value=fnv(ammo_name)},configId={value=0},type={value=848563180},
+        size=4,offsetInBytes=ammo.offsetInBytes,dbgName=ammo_name}
     local function from_native(name,guid,entry)
         local source=resource(guid,"keen::ImpactProgram")
         local found
@@ -124,7 +134,7 @@ function M.plan(settings, api)
     end
     local function donecall(name,args,id) call(name,args,id); emit(27) end
     local function ammo_gate(d,target)
-        load("Ammunition::value");load(d.key.."_id");emit(6);branch(9,target)
+        load("ammunition_value");load(d.key.."_id");emit(6);branch(9,target)
     end
     for _,a in ipairs(active) do
         local d,s=a.def,a.config

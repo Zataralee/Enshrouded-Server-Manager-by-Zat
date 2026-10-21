@@ -3,6 +3,45 @@
 Updated 2026-10-21 against Enshrouded internal revision 1273043. AOE means area
 of effect. This records the expanded scope requested after the shock prototype.
 
+## Alpha.1 field failure and alpha.2 correction
+
+The user reported that enabling only the level-45 chain removed direct damage
+from all tested eternal arrows. Setting that one switch false, applying and
+restarting restored damage. The reported values (spread 48, damage 3, limit 20)
+are saved as a regression fixture; none needed clamping to correct this defect.
+
+The alpha.1 ammunition gate executed `GLoad Ammunition::value` on a `keen::ItemId`
+wrapper before the original damage path. Inspection of the current dedicated
+server's native VM establishes that GLoad only accepts uint32, sint32, float32,
+bool and Time. ItemId falls into its error branch and sets the VM abort flag.
+This applies to every projectile entering the shared program's combat branch,
+before its ammunition can be excluded. The equality instruction itself is
+implemented; the earlier suspicion about its unused status was ruled out.
+
+Alpha.2 adds a uint32 alias for the ItemId value at exactly the same data offset,
+so it sees runtime ammunition configuration instead of a copied startup zero.
+Existing code/data is retained and the gate reads this supported scalar type.
+The simulator now checks the native load/store type allowlist and models aliases
+as shared storage. Against the original alpha.1 ZIP and the user's exact config,
+the new regression rejects the pre-damage load for both matching and unrelated
+ammunition. Alpha.2 passes that regression and the existing modeled scenarios.
+Native combat/replication still requires a player retest; startup alone was not
+and is not adequate to detect this class of failure.
+
+Local native evidence, internal revision 1273043:
+
+- Dedicated executable SHA-256:
+  `d7baa768eb00aa895d9f5a1cd8747ccf66858c7b542f50983092b2e3261588ee`.
+- VM dispatch at RVA `0x9862fd` selects opcode minus one from table `0x986d9c`.
+- GLoad handler starts at `0x986364`; type comparisons at `0x9863ab` through
+  `0x9863dc` whitelist hashes `32940bec`, `9859f31e`, `c894953d`, `dfe4e404`,
+  `e89f7410`. Reflection maps these to the five scalar types above.
+- ItemId hash `5bfc0dbb` is absent. Failure sets flag `0x10` at `0x986436`.
+- Error string at `0x131bc78`: `Can not laod Type '0x%08x' onto stack` (native typo).
+- IEQ handler at `0x986aa4` compares two stack words and writes its boolean result.
+- Disassembly stayed local in `dist/impact-vm-disassembly.txt`; no executable
+  code or game data is bundled with the upload ZIP.
+
 ## Implementation update: 0.2.0-alpha.1
 
 An experimental hit-seeded lightning-arrow chain is now implemented in

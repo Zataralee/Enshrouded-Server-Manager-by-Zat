@@ -17,6 +17,8 @@ GUID = 'c0a8231a-f87f-467c-ad9d-6d4fe93ecda7_d4922d88_0'
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--fixture-dir', required=True, type=Path)
+    parser.add_argument('--regression-package', type=Path,
+                        help='Optional original alpha.1 ZIP to reproduce the reported invalid native load')
     args = parser.parse_args()
     work = args.fixture_dir.resolve()
     assert (work/'SHOCK_MOD_TEST_FIXTURE').read_text().strip() == 'disposable-shock-mod-test'
@@ -27,6 +29,7 @@ def main():
     source = ROOT/'mods'/mid
     version = json.loads((source/'mod.json').read_text())['version']
     defaults = (source/'src/config.lua').read_text()
+    reported = (ROOT/'mods/fixtures/arrow_chain_damage_report.lua').read_text()
     original = eml.digest(work/'Server/enshrouded_server.kfc')
     results = []
     def record(name):
@@ -47,6 +50,21 @@ def main():
         mod.enable(True)
         if mid in mod.state()['mods']:
             mod.change_mod(mid, 'remove')
+        if args.regression_package:
+            mod.import_zip(args.regression_package.read_bytes()); mod.change_mod(mid, 'enable')
+            mod.config_file(mid, 'src/config.lua', reported); mod.apply()
+            broken, assembly = export('chain-alpha1-regression')
+            old = Program(broken, assembly)
+            for ammo in (123, 3133483038, 2453015274, 2369196415):
+                try:
+                    old.scenario(ammo=ammo)
+                except AssertionError as error:
+                    assert 'native VM rejects GLoad type before damage' in str(error), error
+                    assert 'Ammunition::value' in str(error), error
+                else:
+                    raise AssertionError('Regression did not catch the alpha.1 unsupported ItemId load')
+            record('original alpha.1 and reported settings reproduce invalid native ItemId load for every ammo ID')
+            mod.restore(); mod.change_mod(mid, 'remove')
         mod.import_zip((ROOT/f'dist/mods/Zat-Shock-Tuning-v{version}.zip').read_bytes())
         mod.change_mod(mid, 'enable')
         assert mod.config_file(mid)['default_file'] == 'src/config.lua'
@@ -91,6 +109,25 @@ def main():
         assert q.scenario(ammo=2453015274).hits == [(11, 3)]
         assert q.scenario(ammo=2369196415).hits == []
         record('modeled chance pass/fail, finite jump limits and independent tier enable/damage')
+        mod.config_file(mid, 'src/config.lua', reported); mod.apply()
+        profile, assembly = export('chain-reported-settings')
+        q = Program(profile, assembly)
+        q.validate_structure((work/'chain-reported-settings/chain.shutdown.impact').read_text())
+        original_ammo = profile['dataLayout'][q.names['Ammunition::value']]
+        alias = profile['dataLayout'][q.names['ZatArrowChain::ammunition_value']]
+        assert alias['offsetInBytes'] == original_ammo['offsetInBytes']
+        assert alias['size'] == original_ammo['size'] == 4
+        assert alias['type']['value'] == 848563180
+        # scenario() executes pre-hit code through the real branch back to the
+        # original direct-hit path. Both enabled and unrelated IDs must reach it.
+        for ammo in (123, 3133483038, 2453015274):
+            assert q.scenario(ammo=ammo).hits == []
+        assert q.scenario(ammo=2369196415).hits == [(11, 3), (12, 3), (13, 3)]
+        record('reported config: aliased runtime ammo value, all direct-hit paths reachable, level 45 alone chains')
+        mod.config_file(mid, 'src/config.lua', reported.replace('enabled = true', 'enabled = false')); mod.apply()
+        without_chain, _ = export('chain-reported-disabled')
+        assert without_chain == baseline
+        record('reported config with chain disabled restores the entire original projectile program')
         # Zero chance and zero radius compile to a no-op, even with enabled=true.
         for name, config in [
             ('zero chance', enabled.replace('chance_percent = 100', 'chance_percent = 0')),

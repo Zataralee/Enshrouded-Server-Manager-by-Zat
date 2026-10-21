@@ -1,4 +1,13 @@
-Zat Shock Tuning 0.2.0-alpha.1 - validation record, 2026-10-21
+Zat Shock Tuning 0.2.0-alpha.2 - validation record, 2026-10-21
+
+Alpha.1 field report: enabling one chain tier removed arrow damage. Disabling
+that tier restored it. Native executable inspection found that GLoad rejects
+ItemId (0x5bfc0dbb), which the alpha.1 ammunition gate loaded before direct damage.
+The native VM supports IEQ; the problem is the load's type, not the equality opcode.
+Alpha.2 uses a uint32 view at the same ItemId.value memory offset. The test model
+now enforces native GLoad/GStore type restrictions and shared-memory aliases.
+This resolves a concrete bytecode defect; it is not a claim of a successful
+live multiplayer combat retest.
 
 Environment: Windows dedicated server, internal revision 1273043, official
 EML 0.2.0 CLI invoked through ESM-Z's existing EML adapter. The server was a
@@ -27,7 +36,14 @@ Existing scalar integration: 23 checks passed with this package.
   Mass Destruction radius 40 and damage per Intelligence 20. No clamping occurs.
 - Above-former-cap values were tested as decoded data patches, not live combat.
 
-Arrow chain checks: 21 passed (integration, structural checks and modeled native calls).
+Arrow chain checks: 24 passed (integration, structural checks and modeled native calls).
+- The original alpha.1 ZIP with the exact reported settings reproduces a native
+  type rejection before direct damage for enabled and unrelated ammunition IDs.
+- Alpha.2 with those same settings passes the type audit and returns to the
+  original direct-hit path for all tested IDs. The modeled chain is exclusive to
+  level 45, with the requested radius 48, damage 3 and jump limit 20 retained.
+- Disabling chains in that config restores the complete original projectile
+  program while preserving the independent item/spell tuning.
 - Default ZIP imports with src/config.lua selected by the manager adapter.
 - Chains disabled produces no patches. All three tiers enabled modifies one
   existing Impact program, retaining its resource ID and all original data and
@@ -46,7 +62,7 @@ Arrow chain checks: 21 passed (integration, structural checks and modeled native
   if hit history fails to record a victim, radius, damage, chance pass/fail,
   finite jump limits and independent tier switches. These are not engine combat
   results; the model's native semantics remain assumptions to verify in play.
-- An isolated loopback dedicated server with all three chains enabled reached
+- The previous alpha.1 isolated loopback dedicated server with all three chains enabled reached
   Host_Online and Run in 12.1 seconds. No clients connected and no arrows fired.
   Its temporary config was restored, process stopped, and game index restored
   byte for byte. No production server or installed client was patched.

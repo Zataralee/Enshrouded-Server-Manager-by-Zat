@@ -46,3 +46,13 @@ and run the actual emitted words with modeled native calls. They cannot prove
 the native calls' live semantics or server/client authority. The alpha uses a
 rapid, synchronous chain rather than a detached timed effect. The next gate is
 two-client combat, including native hit-history behavior and query performance.
+
+Alpha.2 native type regression:
+    python mods/validate_arrow_chain.py --fixture-dir <absolute-fixture-directory> --regression-package dist/mods/Zat-Shock-Tuning-v0.2.0-alpha.1.zip
+
+The optional original ZIP adds a regression check against the shipped defect.
+mods/fixtures/arrow_chain_damage_report.lua preserves the user's exact setting
+values. Native GLoad/GStore accept only uint32, sint32, float32, bool and Time.
+ItemId is a struct even though its value occupies four bytes. Model aliases must
+share memory offsets, not independent dictionary values. A successful parse,
+balanced stack and boot do not establish a valid native type at execution time.

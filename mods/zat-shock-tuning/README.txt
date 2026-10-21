@@ -1,4 +1,17 @@
-Zat Shock Tuning 0.2.0-alpha.1 - SERVER TEST PROTOTYPE
+Zat Shock Tuning 0.2.0-alpha.2 - SERVER TEST PROTOTYPE
+
+ALPHA.1 DAMAGE REGRESSION FIX
+Do not use alpha.1 with chains enabled. Its ammunition check loaded an ItemId
+wrapper using a native instruction that rejects that type, aborting the shared
+projectile program before direct damage. Enabling even one tier affected other
+projectiles using that program. Alpha.2 reads the ItemId's uint32 value through
+an alias at the same runtime storage address. Your existing config remains valid;
+no reduction in damage, radius or jump count is required for this fix.
+
+The original alpha.1 package fails the new native-type regression check using
+the reported settings; alpha.2 passes. Live multiplayer damage and chaining must
+still be retested. Until upgrading, setting all arrow_chain enabled flags to
+false, applying and restarting removes the faulty shared-program patch.
 
 Requires ESM-Z beta with upstream EML 0.2.0 and Enshrouded internal revision 1273043.
 Other game revisions are rejected before any changes. See the EML log for the
@@ -86,7 +99,7 @@ Representation checks cannot guarantee crash-free gameplay: very large queries
 can be expensive and later damage calculations can overflow. No universal safe
 maximum has been established; increase values incrementally in a test world.
 
-UPGRADING FROM 0.1.0 OR 0.1.1 THROUGH THE BROWSER
+UPGRADING FROM 0.1.0, 0.1.1 OR 0.2.0-alpha.1 THROUGH THE BROWSER
 Existing keys/defaults are unchanged. An old config without arrow_chain is
 accepted with chains disabled. An old config without eternal_arrows leaves the
 eight ice/fire/bone coefficients at vanilla values.
