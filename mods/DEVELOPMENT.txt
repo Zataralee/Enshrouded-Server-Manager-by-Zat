@@ -34,3 +34,15 @@ Future work: determine per-setting multiplayer authority with unmodified clients
 before claiming server-only support. A new chance-based AOE trigger requires a
 separate implementation and multiplayer gate; it is not a scalar config option
 in this version. No live Lua hit callback is assumed.
+
+Arrow-chain alpha (0.2.0-alpha.1):
+    python mods/validate_arrow_chain.py --fixture-dir <absolute-fixture-directory>
+
+src/arrow_chain.lua emits an original Impact extension at EML apply time, using
+the installed game program as its baseline. It appends code/data and redirects
+two guarded branch operands. No compiled game program or parser is distributed.
+The new checks export through upstream kfc-parser, audit control flow/stack use,
+and run the actual emitted words with modeled native calls. They cannot prove
+the native calls' live semantics or server/client authority. The alpha uses a
+rapid, synchronous chain rather than a detached timed effect. The next gate is
+two-client combat, including native hit-history behavior and query performance.

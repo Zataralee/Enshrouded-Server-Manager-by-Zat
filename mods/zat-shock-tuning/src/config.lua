@@ -1,4 +1,4 @@
--- Zat Shock Tuning 0.1.1. Edit this file through ESM-Z > Mods > Configure.
+-- Zat Shock Tuning 0.2.0-alpha.1. Edit through ESM-Z > Mods > Configure.
 -- Stop the server, save, Apply & Validate Mods, then start the server.
 -- All shipped numbers preserve vanilla gameplay. config.defaults.lua is a backup.
 -- Distances are game units; the exact in-game geometry needs multiplayer testing.
@@ -43,11 +43,24 @@ return {
         bone_36_damage = 0.5,
         bone_45_damage = 0.5,
     },
+    arrow_chain = {
+        -- EXPERIMENTAL: opt in on a test world. Server-only combat is unverified.
+        -- One chance roll per successful, unblocked enemy arrow hit; 100 = always.
+        -- spread_radius: distance from the last hit enemy; 7 matches the spell.
+        -- damage: secondary attack coefficient, independent of the direct hit.
+        -- max_jumps: secondary targets; 0 = no user limit. Nonnegative uint32.
+        -- Native hit history excludes previous victims. No extra mana per jump.
+        -- Rapid chain, not the spell's timed cadence. Native lightning-link VFX.
+        -- No balance caps; range/damage use float32, chance is 0..100 percent.
+        eternal_20 = { enabled = false, chance_percent = 100, spread_radius = 7.0, damage = 0.5, max_jumps = 0 },
+        eternal_36 = { enabled = false, chance_percent = 100, spread_radius = 7.0, damage = 0.5, max_jumps = 0 },
+        eternal_45 = { enabled = false, chance_percent = 100, spread_radius = 7.0, damage = 0.5, max_jumps = 0 },
+    },
     mass_destruction = {
         -- Existing skill only: retains its staff/wand critical-hit requirement.
         radius = 15,                 -- Suggested: 1 to 30; nonnegative signed 32-bit integer.
         damage_per_intelligence = 2, -- Suggested: 0 to 10; unsigned 32-bit integer, before combat processing.
     },
-    -- This prototype does NOT implement new random AOE-on-hit, jump caps,
+    -- This prototype does NOT implement new circular AOE-on-hit,
     -- per-jump falloff, global shock debuffs or stun changes. No inactive toggles.
 }

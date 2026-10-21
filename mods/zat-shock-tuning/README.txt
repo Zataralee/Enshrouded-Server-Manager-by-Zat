@@ -1,4 +1,4 @@
-Zat Shock Tuning 0.1.1 - SERVER TEST PROTOTYPE
+Zat Shock Tuning 0.2.0-alpha.1 - SERVER TEST PROTOTYPE
 
 Requires ESM-Z beta with upstream EML 0.2.0 and Enshrouded internal revision 1273043.
 Other game revisions are rejected before any changes. See the EML log for the
@@ -10,6 +10,10 @@ server-only gameplay are NOT yet certified. Starting successfully does not
 establish that unmodified clients use the changed values.
 
 WHAT WORKS IN THIS PROTOTYPE
+- Experimental eternal lightning-arrow chains: levels 20/36/45 independently
+  enable a chain after an unblocked enemy hit. Per-tier chance, spread radius,
+  secondary attack coefficient and optional maximum jumps. Disabled by default.
+  This is implemented behavior awaiting real multiplayer combat verification.
 - Chain lightning: initial targeting range, propagation sphere radius, five
   spell variants' raw damage coefficients and mana costs.
 - All 11 eternal arrow variants: independent direct-hit damage coefficients.
@@ -21,9 +25,43 @@ WHAT WORKS IN THIS PROTOTYPE
   Its staff/wand critical-hit requirement and skill requirement remain intact.
 
 NOT INCLUDED YET
-New random shock AOE on hit; AOE activation probability; maximum chain jumps;
+New circular shock AOE on hit; circular AOE activation probability;
 per-jump damage falloff; global shock/debuff changes; stun strength changes;
 new wands, melee effects, skills, items, or visual assets.
+
+ARROW CHAIN ALPHA
+In src/config.lua, find arrow_chain and set enabled = true for the arrow tier
+you use. For a first test, keep chance_percent = 100, spread_radius = 7.0 and
+damage = 0.5; optionally set max_jumps = 2 to make the expected count clear.
+max_jumps counts SECONDARY enemies; 0 removes the user-selected count limit.
+These values are a test profile, not enforced maximums. A chance of 0 or spread
+of 0 disables that tier's chain behavior. Each tier can have different numbers.
+
+The search moves to each successive victim. Direct-hit damage remains in
+lightning_arrows; changing chain damage does not alter that setting or spell
+damage. Chain damage uses the arrow's existing combat context, with its own
+raw attack coefficient and no secondary critical roll or extra mana cost.
+Final health loss still depends on the game and the victim's defenses.
+
+This alpha resolves secondary hits rapidly during the original hit execution.
+It does not reproduce the spell's timed hop cadence. It reuses the native
+lightning-link visual, with no new asset IDs. It does not enlarge the flying
+arrow's collider. Ground hits, blocked hits and unrelated ammunition retain
+their original paths. The chain uses enemy checks and the game's hit history;
+it stops if a secondary hit fails to be recorded. It does not reset hit history.
+No custom terrain damage or circular explosion is added. Wall occlusion and
+native root/collider deduplication still need gameplay verification.
+
+The existing projectile program is shared, so mods editing it can conflict.
+Baseline checks refuse an already changed program. Having no new IDs does NOT
+prove unmodified clients execute the new branch or display identical effects.
+No live combat was exercised by automated checks. If chaining does not occur,
+record whether direct damage changed and whether either player saw a link;
+do not assume an invisible effect means no server damage, or vice versa.
+
+There is no hidden jump/range/damage cap. Very large ranges with unlimited jumps
+can produce substantial synchronous query work. No crash-free upper bound is
+known; the validator checks storage and semantics, not live server performance.
 
 INSTALL THROUGH ESM-Z
 1. Back up your world and use a test instance or a test copy of it initially.
@@ -48,14 +86,14 @@ Representation checks cannot guarantee crash-free gameplay: very large queries
 can be expensive and later damage calculations can overflow. No universal safe
 maximum has been established; increase values incrementally in a test world.
 
-UPGRADING FROM 0.1.0 THROUGH THE BROWSER
-This release removes the previous balance caps and adds eight arrow settings.
-Existing keys/defaults are unchanged; an old config without eternal_arrows is
-accepted and leaves those additional arrows at vanilla values.
+UPGRADING FROM 0.1.0 OR 0.1.1 THROUGH THE BROWSER
+Existing keys/defaults are unchanged. An old config without arrow_chain is
+accepted with chains disabled. An old config without eternal_arrows leaves the
+eight ice/fire/bone coefficients at vanilla values.
 Stop the server. Copy your current src/config.lua text to retain your settings.
 Remove the old mod through ESM-Z, upload the new ZIP, enable it, and paste your
-saved settings into Configure > src/config.lua. To tune the new arrows, merge your
-previous settings into the new config so its eternal_arrows section is retained.
+saved settings into Configure > src/config.lua. To use chains, merge your old
+settings into the new config so the arrow_chain section is retained.
 Save, Apply & Validate Mods, start.
 The current manager does not replace an installed mod through a duplicate upload.
 No server machine access is needed. Removing a mod deletes its stored config,
@@ -66,6 +104,16 @@ The defaults file is documentation only; the mod reads src/config.lua.
 Keep a copy of your edited config before upgrading/re-uploading the mod.
 
 FIRST CONTROLLED TEST
+Arrow chains: use two unmodified clients on an isolated server and take turns
+shooting. Arrange enemies A--B--C so C is outside A's radius but within B's.
+At 100% chance and max_jumps = 2, verify two secondary victims, correct health
+loss and links. Repeat at max_jumps = 1, 0% chance, and then unlimited with two
+enemies to check that they never bounce indefinitely. Check allies, blocked
+shots, killing shots and ordinary arrows. Confirm that changing each tier's
+damage/radius only affects that tier. Test a 25% chance over many eligible hits.
+Report server/client revision, equipment, skills, config and both viewpoints.
+
+Existing scalar controls:
 1. With vanilla config, cast the same chain spell on a repeatable group with
    fixed equipment, skills and difficulty. Record secondary targets and damage.
 2. Stop the server and change ONLY spread_radius from 7.0 to 10.0. Apply and

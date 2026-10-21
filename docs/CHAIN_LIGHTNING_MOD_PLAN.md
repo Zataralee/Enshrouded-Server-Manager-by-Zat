@@ -8,8 +8,9 @@ The user explicitly rejected arbitrary balance caps; recommendations remain
 advisory and only technical/semantic validity checks are enforced.
 The follow-up now also specifies optional hit-seeded chain lightning for all
 three eternal shock-arrow tiers, with independent spread/damage/chance controls,
-an optional user-selected jump count, and separate radial AOE. That behavior is
-planned, not included in the 0.1.1 scalar package.
+an optional user-selected jump count, and separate radial AOE. Chains are now
+implemented in the opt-in 0.2.0-alpha.1 prototype; see that follow-up's current
+implementation/validation section. Circular arrow AOE remains planned.
 
 Build one configurable EML mod for existing chain-lightning and shock effects, plus an optional shock burst on qualifying weapon hits. The user explicitly requested both tuning existing effects and optionally adding shock AOE on hit. Multiplayer compatibility and easy installation through ESM-Z are release requirements. Server-only operation is the preferred test target, not an established capability.
 

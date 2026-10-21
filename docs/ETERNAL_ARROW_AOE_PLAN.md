@@ -3,6 +3,37 @@
 Updated 2026-10-21 against Enshrouded internal revision 1273043. AOE means area
 of effect. This records the expanded scope requested after the shock prototype.
 
+## Implementation update: 0.2.0-alpha.1
+
+An experimental hit-seeded lightning-arrow chain is now implemented in
+`mods/zat-shock-tuning/src/arrow_chain.lua`. Its supported configuration is the
+top-level `arrow_chain` section in the packaged `src/config.lua`, with independent
+`eternal_20`, `eternal_36` and `eternal_45` blocks. The nested schema below remains
+a future proposal; no migration of existing damage keys is required in this alpha.
+Old configs omit `arrow_chain` and keep chains disabled.
+
+The extension preserves the shared projectile program's original code except
+for two branch destinations, gates by exact ammunition ID, records target origin
+and enemy eligibility before the direct hit, then runs secondary queries after
+the successful unblocked hit. Chance, radius, damage and optional jump limits
+have actual consumers. A zero limit imposes no user-selected count limit. It
+uses native hit history and stops if that history fails to record progress.
+The original collider, item IDs and resource GUIDs stay unchanged.
+
+This first alpha performs a rapid synchronous chain with the native link VFX,
+instead of a detached effect with timed hops. That avoids new effect resources
+and a chain tied to the flying projectile's remaining lifetime, but large queries
+can monopolize a frame. Native history must still be verified as a complete root
+history during combat. The implementation does not claim a proven explicit
+visited set, wall occlusion, or an engine performance guarantee.
+
+Validation: 23 existing scalar integration checks and 21 chain checks passed.
+The chain checks include decoding, full stack/control-flow audit and execution
+of emitted words with modeled native calls. A loopback dedicated server reached
+Run with all three chains enabled. No live combat or client replication was
+tested. The ZIP is an opt-in test alpha, not a certified server-only release.
+Circular AOE for the eleven eternal arrows remains a separate outstanding feature.
+
 ## Implemented in the 0.1.1 test package
 
 All 11 eternal arrow variants now have independently editable direct-hit damage
@@ -219,8 +250,9 @@ Prototype order:
    which client shoots. If a separate effect resource is necessary, test whether
    clients require that resource; shared GUIDs alone do not prove server authority.
 
-Status: the native path and proposed contract are identified. The new chain
-trigger, traversal and multiplayer behavior are not implemented or certified.
+Original design status: the native path and proposed contract were identified
+before implementation. See the implementation update above for the alpha's
+current scope and remaining differences from this proposed contract.
 
 ### Existing arrow paths
 

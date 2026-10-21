@@ -1,10 +1,10 @@
-Zat Shock Tuning 0.1.1 - validation record, 2026-10-21
+Zat Shock Tuning 0.2.0-alpha.1 - validation record, 2026-10-21
 
 Environment: Windows dedicated server, internal revision 1273043, official
 EML 0.2.0 CLI invoked through ESM-Z's existing EML adapter. The server was a
 separate Steam-validated installation with an isolated test world and port.
 
-Verified:
+Existing scalar integration: 23 checks passed with this package.
 - The upload ZIP imports, enables, and exposes src/config.lua in ESM-Z's adapter.
 - Vanilla defaults produce zero modified-resource patches.
 - A changed config applies 13 requested setting changes. Exporting the patched
@@ -25,9 +25,31 @@ Verified:
 - Values above every previous balance cap are accepted and decoded correctly:
   targeting 60, chain radius 20, spell damage 4, mana 600, arrow damage 5,
   Mass Destruction radius 40 and damage per Intelligence 20. No clamping occurs.
-- The 0.1.0 tuned dedicated server reached Host_Online and then Run. The same
-  asset paths remain in 0.1.1; above-former-cap values were tested as data patches,
-  not through live gameplay or server startup.
+- Above-former-cap values were tested as decoded data patches, not live combat.
+
+Arrow chain checks: 21 passed (integration, structural checks and modeled native calls).
+- Default ZIP imports with src/config.lua selected by the manager adapter.
+- Chains disabled produces no patches. All three tiers enabled modifies one
+  existing Impact program, retaining its resource ID and all original data and
+  layout entries. Only two original branch operands are redirected; original
+  direct-hit instructions and the unrelated paths remain in place.
+- Upstream kfc-parser successfully disassembles the patched program and shutdown
+  path. Branch destinations/data operands are valid and stack heights agree at
+  joins. Maximum analyzed stack height is 25 against capacity 256.
+- Repeated apply produces identical decoded content, with no compounding.
+- Zero chance or zero spread removes the chain program patch.
+- Invalid probabilities, fractional/overflowing limits, nonboolean switches and
+  negative damage are rejected, retaining the original game index.
+- The emitted bytecode was executed with MODELED native game calls. Scenarios
+  cover unrelated ammunition, blocked hits, all three arrow IDs, changing origin,
+  initial killing hits, no ping-pong with native hit-history assumptions, stopping
+  if hit history fails to record a victim, radius, damage, chance pass/fail,
+  finite jump limits and independent tier switches. These are not engine combat
+  results; the model's native semantics remain assumptions to verify in play.
+- An isolated loopback dedicated server with all three chains enabled reached
+  Host_Online and Run in 12.1 seconds. No clients connected and no arrows fired.
+  Its temporary config was restored, process stopped, and game index restored
+  byte for byte. No production server or installed client was patched.
 
 Not verified:
 - Any player connection, combat behavior, damage authority, visual agreement,
@@ -41,6 +63,6 @@ startup with the restored, clean index produced the same diagnostic and also
 reached Run. This diagnostic is not specific to this mod. Successful startup
 is not a certification of error-free gameplay.
 
-This package contains no new random AOE trigger. Existing
-Mass Destruction settings retain the existing skill and critical-hit conditions.
+This package contains an experimental chance-based arrow chain, not a circular
+AOE trigger. Existing Mass Destruction settings retain their skill/crit conditions.
 See README.txt for installation, controlled gameplay tests, and restoration.
