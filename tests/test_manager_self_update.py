@@ -111,7 +111,7 @@ class ManagerSelfUpdateTests(unittest.TestCase):
 
         self.assertTrue(verified)
 
-    def test_manual_install_preserves_data_and_marks_restart_required(self):
+    def test_update_staging_preserves_live_files_and_data(self):
         with tempfile.TemporaryDirectory() as temporary:
             temp = Path(temporary)
             app_dir = temp / "enshrouded_manager"
@@ -129,6 +129,7 @@ class ManagerSelfUpdateTests(unittest.TestCase):
                 archive.writestr("enshrouded_manager/manager.py", 'APP_VERSION = "99.0.0"\n')
                 archive.writestr("enshrouded_manager/static/index.html", "new")
                 archive.writestr("enshrouded_manager/new.txt", "new")
+                archive.writestr("enshrouded_manager/update_runtime.py", "# update helper\n")
 
             original = (manager.APP_DIR, manager.DATA_DIR, manager.MANAGER_CONFIG, manager.MANAGER_LOG)
             manager.APP_DIR = app_dir
@@ -161,10 +162,11 @@ class ManagerSelfUpdateTests(unittest.TestCase):
                 manager.APP_DIR, manager.DATA_DIR, manager.MANAGER_CONFIG, manager.MANAGER_LOG = original
 
             self.assertEqual("keep", (data_dir / "preserve.txt").read_text(encoding="utf-8"))
-            self.assertFalse((app_dir / "old.txt").exists())
-            self.assertEqual("new", (app_dir / "new.txt").read_text(encoding="utf-8"))
-            self.assertTrue(result["restart_required"])
-            self.assertEqual("99.0.0", result["installed_pending_version"])
+            self.assertTrue((app_dir / "old.txt").exists())
+            self.assertFalse((app_dir / "new.txt").exists())
+            self.assertEqual("new", (Path(result["source"]) / "new.txt").read_text())
+            self.assertTrue((Path(result["backup"]) / "old.txt").is_file())
+            self.assertEqual("99.0.0", result["target_version"])
 
 
 if __name__ == "__main__":

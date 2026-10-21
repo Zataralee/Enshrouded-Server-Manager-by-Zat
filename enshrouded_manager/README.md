@@ -30,6 +30,6 @@ Included features:
 - Build a smaller zip for machines that already have Python using `enshrouded_manager\build_python_required_release.ps1`.
 - Build an exe with `enshrouded_manager\build_exe.ps1` after installing PyInstaller.
 
-The Python-required release script updates the latest zip in `dist` and also keeps a copy in `dist\versions` named with the manager version. Manager update checks are notification-only until an admin clicks Download & Install Update. The updater preserves `data`, backs up the current files, and asks for a manager restart after installation. Running servers are launched as detached processes and are not intentionally stopped when the manager exits, so updating the manager does not require restarting every game server.
+The Python-required release scripts keep versioned packages in `dist\versions`. Manager update checks are notification-only until an admin clicks Download & Install Update. From v0.9.6.2a/b, the updater stages and verifies the package, preserves `data`, backs up manager files, restarts itself, and reconnects the browser. A failed startup triggers file rollback and relaunch of the previous manager. Upgrading an older manager to this updater requires one final manual restart. Running servers remain detached and are not intentionally stopped. See `docs/REMOTE_UPDATES.md`.
 
 Only open the configured manager TCP port in Windows Firewall if you intentionally want to reach the UI from another machine.

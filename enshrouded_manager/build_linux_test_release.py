@@ -38,13 +38,14 @@ with tempfile.TemporaryDirectory() as temporary:
     packaged_manager = stage / "enshrouded_manager"
     packaged_manager.mkdir(parents=True)
     shutil.copy2(MANAGER_DIR / "manager.py", packaged_manager / "manager.py")
+    shutil.copy2(MANAGER_DIR / "update_runtime.py", packaged_manager / "update_runtime.py")
     shutil.copytree(MANAGER_DIR / "static", packaged_manager / "static")
     shutil.copy2(MANAGER_DIR / "README.md", packaged_manager / "README.md")
     shutil.copy2(MANAGER_DIR / "USER_README.md", packaged_manager / "USER_README.md")
     launcher = (MANAGER_DIR / "Run ESM-Z.sh").read_text(encoding="utf-8")
     (stage / "Run ESM-Z.sh").write_text(launcher, encoding="utf-8", newline="\n")
     shutil.copy2(ROOT / "README.md", stage / "PROJECT_README.md")
-    shutil.copytree(ROOT / "docs", stage / "docs")
+    shutil.copytree(ROOT / "docs", stage / "docs", ignore=shutil.ignore_patterns("MODDING_VIABILITY_*.md"))
     shutil.copy2(ROOT / "docs" / "LINUX_ALPHA.md", stage / "README_FIRST.md")
 
     with tarfile.open(OUTPUT, "w:gz") as archive:

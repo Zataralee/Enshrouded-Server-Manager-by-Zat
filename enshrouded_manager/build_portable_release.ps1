@@ -19,6 +19,7 @@ New-Item -ItemType Directory -Force -Path (Join-Path $Stage "enshrouded_manager"
 
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "static") -Destination (Join-Path $Stage "enshrouded_manager") -Recurse
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "manager.py") -Destination (Join-Path $Stage "enshrouded_manager")
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot "update_runtime.py") -Destination (Join-Path $Stage "enshrouded_manager")
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "README.md") -Destination (Join-Path $Stage "enshrouded_manager")
 Copy-Item -LiteralPath $BundledPython -Destination (Join-Path $Stage "python") -Recurse
 

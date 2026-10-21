@@ -87,14 +87,14 @@ New installs can take several minutes. If SteamCMD has to be downloaded for the 
 
 Running game servers are launched as persistent detached processes. Closing or updating the manager should not intentionally stop every running game server.
 
-The Manager tab checks published GitHub Releases for ESM-Z updates. Git tags and manually copied files are not releases. The status panel shows the installed version, latest published release, and last check separately so a local build newer than the published release is not mislabeled as up to date. The default repository is public and needs no token; custom repository and private-repository credentials are under Advanced update source. Update checks never install files automatically. When a compatible update is available, an admin notice appears and the admin can click **Download & Install Update**. ESM-Z verifies the release checksum when one is attached, validates the package version, backs up the existing manager files, and preserves the `data` directory. Restart ESM-Z after the install completes; running game servers are not intentionally stopped.
+The Manager tab checks published GitHub Releases for ESM-Z updates. Git tags and manually copied files are not releases. The status panel shows the installed version, latest published release, and last check separately. The default repository is public and needs no token; private/custom repository settings are under Advanced update source. Checks never install files automatically. From v0.9.6.2a/b onward, an admin-approved update verifies the required checksum, stages and backs up manager files, restarts the manager, and reconnects the browser. Running game servers are not stopped. See [Remote Updates](REMOTE_UPDATES.md) for recovery and first-upgrade instructions.
 
 To update from the UI:
 
 1. Open Manager and review the ESM-Z Updates section.
 2. Click **Check Now** if you do not want to wait for the scheduled check.
 3. Click **Download & Install Update** and confirm the prompt.
-4. After ESM-Z reports that the package is installed, restart the manager process.
+4. Wait for the update dialog to reconnect and reload into the new version. When upgrading an older manager to this version for the first time, restart ESM-Z manually once instead.
 5. Check the Updates tab for the version history.
 
 Game servers should still be visible when the manager comes back up.

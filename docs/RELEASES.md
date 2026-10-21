@@ -2,6 +2,21 @@
 
 ## Current Release
 
+**v0.9.6.2a** - 2026-10-21
+
+- Added staged, administrator-approved updates with automatic manager restart and browser reconnection.
+- Added an independent helper, startup health checks, and rollback to the previous manager if startup fails.
+- Preserved remote login sessions across restarts; logout, expiry, and password changes invalidate sessions.
+- Waits for active server operations and leaves running game server processes alone.
+- Requires a release checksum for remote updates. Existing older managers need one final manual restart to activate this updater.
+- Stable remains free of EML integration. See [remote update instructions](REMOTE_UPDATES.md).
+
+### v0.9.6.1a - 2026-10-20
+
+Adds Manager > Run beta version, Windows beta selection, four-part version ordering, and return to the paired stable release. No EML integration is installed in stable. See [beta channel instructions](BETA_CHANNEL.md).
+
+## Previous Release
+
 **v0.9.6** - 2026-10-19
 
 Package: download `ESM-Z-PythonRequired-v0.9.6.zip` from the [GitHub release](https://github.com/Zataralee/Enshrouded-Server-Manager-by-Zat/releases/tag/v0.9.6).
@@ -13,6 +28,13 @@ Changes:
 - Stops save/backup polling without a selected server and clears stale browser selections.
 
 ## Experimental Prerelease
+
+**v0.10.0-linux-alpha.8** - 2026-10-21
+
+- Added the staged remote updater, independent restart/rollback helper, persisted sessions, and browser reconnection.
+- Retained Linux archive extraction, runtime behavior, and environment listen-address/port overrides.
+- Windows real-process and browser tests passed; real Linux host verification is still required.
+- Existing installations require one final manual manager restart to load the updater.
 
 **v0.10.0-linux-alpha.7** - 2026-10-19
 
