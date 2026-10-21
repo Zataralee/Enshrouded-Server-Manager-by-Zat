@@ -1,0 +1,36 @@
+Shock Tuning development
+
+Build from the repository root:
+    python mods/build_shock_mod.py
+
+Output: dist/mods/Zat-Shock-Tuning-v0.1.0.zip and a SHA-256 checksum file.
+The ZIP includes a second copy of the vanilla config as src/config.defaults.lua.
+No modified game resources, third-party tools, or server saves are distributed.
+
+Integration validation requires a DISPOSABLE, stopped dedicated-server fixture:
+    python mods/validate_shock_mod.py --fixture-dir <absolute-fixture-directory>
+
+Fixture layout:
+    SHOCK_MOD_TEST_FIXTURE  (exact text: disposable-shock-mod-test)
+    Server/                (complete, clean revision 1273043 server installation)
+    parser/kfc-parser.exe  (upstream resource extraction CLI)
+    parser/reflection_data.json (matching revision's reflection data)
+    baseline/              (clean JSON export of ItemInfo, ActorSequenceResource,
+                            SkillTreeResource, TemplateResource and ImpactProgram)
+
+The marker is an explicit operator assertion that this is disposable. The test
+changes its EML state and overwrites this mod's test config, then restores the
+game index in a finally block. Never put the marker beside a production server.
+The script needs the repository's bundled official EML 0.2.0 executable.
+It does not start a server or join clients. Results and complete relevant
+resource diffs are written beneath the fixture directory.
+
+The October 21 fixture and startup logs are local ignored research artifacts:
+    dist/shock-mod-validation-20261021/
+The startup check used a separate loopback port, random password and new save
+directory. It reached Run with tuned resources; no combat test was performed.
+
+Future work: determine per-setting multiplayer authority with unmodified clients
+before claiming server-only support. A new chance-based AOE trigger requires a
+separate implementation and multiplayer gate; it is not a scalar config option
+in this version. No live Lua hit callback is assumed.

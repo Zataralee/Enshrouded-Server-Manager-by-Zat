@@ -1,0 +1,9 @@
+{
+  "id": "zat-shock-tuning",
+  "name": "Zat Shock Tuning - Server Test",
+  "version": "0.1.0",
+  "capabilities": ["patch"],
+  "description": "Configurable chain lightning, lightning arrow damage, and existing Mass Destruction AOE. Vanilla defaults. Server-only gameplay verification pending.",
+  "authors": ["Zataralee"],
+  "license": "MIT"
+}
