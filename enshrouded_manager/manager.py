@@ -984,7 +984,7 @@ def wait_for_update_idle(timeout=600):
     raise RuntimeError("An active server operation did not finish within 10 minutes. Retry the manager update later.")
 
 
-def start_manager_update():
+def start_manager_update(expected_channel=None):
     if getattr(sys, "frozen", False):
         raise RuntimeError("Remote restart requires the Python-required release, not an executable build")
     if HTTP_SERVER is None:
@@ -1009,6 +1009,8 @@ def start_manager_update():
         handed_off = False
         try:
             wait_for_update_idle()
+            if expected_channel is not None and manager_updates_config().get("channel") != expected_channel:
+                raise RuntimeError("The update channel changed. Check for updates again before installing.")
             plan = install_manager_update()
             job = Path(plan["job"])
             helper = job / "update-helper.py"
@@ -2604,10 +2606,16 @@ def manager_updates_config():
     return config().get("manager_updates", default_manager_updates())
 
 
-def check_manager_updates(force=False):
+def check_manager_updates(force=False, channel=None):
+    if channel is not None and channel not in {"stable", "beta"}:
+        raise ValueError("Select the stable or beta update channel")
     with CONFIG_LOCK:
         cfg = config()
         updates = cfg.setdefault("manager_updates", default_manager_updates())
+        if channel is not None and channel != updates.get("channel"):
+            updates.update(channel=channel, last_checked_at="", latest_version="", latest_url="",
+                           last_error="", package_available=False, update_available=False, release_state="unchecked")
+            save_json(MANAGER_CONFIG, cfg)
         if not updates.get("enabled", True) and not force:
             return dict(updates)
         interval_hours = max(1, int(updates.get("interval_hours", 24) or 24))
@@ -2631,6 +2639,8 @@ def check_manager_updates(force=False):
         with CONFIG_LOCK:
             cfg = config()
             updates = cfg.setdefault("manager_updates", default_manager_updates())
+            if updates.get("channel", "auto") != channel or updates.get("repo", GITHUB_REPO) != repo:
+                return dict(updates)
             was_available = bool(updates.get("update_available", False))
             pending_restart = bool(
                 updates.get("restart_required")
@@ -2662,6 +2672,8 @@ def check_manager_updates(force=False):
         with CONFIG_LOCK:
             cfg = config()
             updates = cfg.setdefault("manager_updates", default_manager_updates())
+            if updates.get("channel", "auto") != channel or updates.get("repo", GITHUB_REPO) != repo:
+                return dict(updates)
             updates.update({"last_checked_at": now_iso(), "release_state": "error", "last_error": str(exc)})
             save_json(MANAGER_CONFIG, cfg)
             return dict(updates)
@@ -3862,7 +3874,7 @@ class Handler(SimpleHTTPRequestHandler):
     def handle_post(self):
         route = urlparse(self.path).path
         origin = self.headers.get("Origin")
-        if route == "/api/manager/install-update" and origin and urlparse(origin).netloc != self.headers.get("Host"):
+        if route in {"/api/manager/install-update", "/api/manager/check-update"} and origin and urlparse(origin).netloc != self.headers.get("Host"):
             return self.send_json({"error": "Cross-origin updates are not permitted"}, 403)
         try:
             if route.startswith("/api/mods/"):
@@ -4070,11 +4082,18 @@ class Handler(SimpleHTTPRequestHandler):
             if route == "/api/manager/check-update":
                 if not self.require_admin():
                     return
-                return self.send_json({"ok": True, "manager_updates": public_manager_updates(check_manager_updates(force=True))})
+                body = self.json_body()
+                return self.send_json({"ok": True, "manager_updates": public_manager_updates(
+                    check_manager_updates(force=True, channel=body.get("channel")))})
             if route == "/api/manager/install-update":
                 if not self.require_admin():
                     return
-                return self.send_json({"ok": True, "operation": start_manager_update()}, 202)
+                channel = self.json_body().get("channel")
+                if channel is not None and channel not in {"stable", "beta"}:
+                    raise ValueError("Select the stable or beta update channel")
+                if channel is not None and channel != manager_updates_config().get("channel"):
+                    raise RuntimeError("The update channel changed. Check for updates again before installing.")
+                return self.send_json({"ok": True, "operation": start_manager_update(expected_channel=channel)}, 202)
             if route == "/api/webhooks/test":
                 if not self.require_perm("settings"):
                     return

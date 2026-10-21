@@ -16,6 +16,51 @@ SPEC.loader.exec_module(manager)
 
 
 class ManagerSelfUpdateTests(unittest.TestCase):
+    def test_checkbox_check_saves_only_channel_without_saving_manager_form(self):
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.multiple(
+                manager, DATA_DIR=Path(temporary), MANAGER_CONFIG=Path(temporary) / "config.json",
+                MANAGER_LOG=Path(temporary) / "manager.log"):
+            cfg = manager.default_config()
+            cfg["manager_updates"].update(channel="stable", enabled=False)
+            cfg["port"] = 18432
+            manager.save_json(manager.MANAGER_CONFIG, cfg)
+            release = {"tag_name": "v99.0.0.1b", "prerelease": True,
+                       "assets": [{"name": "ESM-Z-PythonRequired-v99.0.0.1b.zip"}]}
+            with mock.patch.object(manager, "latest_release_for_host", return_value=release) as lookup, \
+                    mock.patch.object(manager, "notify_webhook_event"):
+                result = manager.check_manager_updates(force=True, channel="beta")
+            self.assertEqual("beta", lookup.call_args.kwargs["channel"])
+            self.assertTrue(result["update_available"])
+            saved = manager.config()
+            self.assertEqual("beta", saved["manager_updates"]["channel"])
+            self.assertEqual(18432, saved["port"])
+            self.assertFalse(saved["manager_updates"]["enabled"])
+
+    def test_old_channel_check_cannot_overwrite_new_channel_results(self):
+        for fails in (False, True):
+            with self.subTest(fails=fails), tempfile.TemporaryDirectory() as temporary, mock.patch.multiple(
+                    manager, DATA_DIR=Path(temporary), MANAGER_CONFIG=Path(temporary) / "config.json",
+                    MANAGER_LOG=Path(temporary) / "manager.log"):
+                cfg = manager.default_config()
+                cfg["manager_updates"]["channel"] = "stable"
+                manager.save_json(manager.MANAGER_CONFIG, cfg)
+                def concurrent_check(*args, **kwargs):
+                    new = manager.config()
+                    new["manager_updates"].update(channel="beta", latest_version="99.0.0.1b", last_error="")
+                    manager.save_json(manager.MANAGER_CONFIG, new)
+                    if fails:
+                        raise RuntimeError("old channel lookup failed")
+                    return {"tag_name": "v99.0.0.1a", "assets": []}
+                with mock.patch.object(manager, "latest_release_for_host", side_effect=concurrent_check):
+                    result = manager.check_manager_updates(force=True)
+                self.assertEqual("beta", result["channel"])
+                self.assertEqual("99.0.0.1b", result["latest_version"])
+                self.assertEqual("", result["last_error"])
+
+    def test_checkbox_rejects_unrelated_prerelease_channel(self):
+        with self.assertRaises(ValueError):
+            manager.check_manager_updates(force=True, channel="prerelease")
+
     def test_four_part_and_letter_versions_are_ordered(self):
         versions = ["0.9.6", "0.9.6.1a", "0.9.6.1b", "0.9.6.2a", "0.9.7", "0.10.0-linux-alpha.7", "0.10.0"]
         self.assertEqual(versions, sorted(reversed(versions), key=manager.version_parts))

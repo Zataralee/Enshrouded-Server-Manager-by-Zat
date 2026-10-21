@@ -415,7 +415,7 @@
         <label class="check"><input name="manager_updates_enabled" type="checkbox"> Check GitHub for ESM-Z updates</label>
         <label>Check interval hours <input name="manager_updates_interval_hours" type="number" min="1"></label>
         <label class="check"><input name="manager_updates_beta" type="checkbox"> Run beta version</label>
-        <p class="form-note">Save this setting, then check for updates and install the selected version. Beta enables experimental features including EML mods. Uncheck to return to the paired stable version. Restart ESM-Z after installation.</p>
+        <p class="form-note">Choose beta or stable, then click Check for Updates. No separate save is needed. Download, Install &amp; Restart switches versions and reconnects this page automatically. Disable EML before returning to the paired stable version.</p>
         <p class="form-note">ESM-Z checks in the background and shows a notice when an update is available. Updates are installed only when an admin clicks the install button.</p>
         <div class="wide-field update-check-panel">
           <strong id="managerUpdateStatus">Update status unavailable</strong>
@@ -426,8 +426,8 @@
           </dl>
           <small id="managerUpdateDetail"></small>
           <div class="actions">
-            <button type="button" data-action="checkManagerUpdate">Check Now</button>
-            <button id="installManagerUpdateButton" type="button" data-action="installManagerUpdate">Download & Install Update</button>
+            <button type="button" data-action="checkManagerUpdate">Check for Updates</button>
+            <button id="installManagerUpdateButton" type="button" data-action="installManagerUpdate">Download, Install &amp; Restart</button>
           </div>
         </div>
         <details class="wide-field update-source-settings">

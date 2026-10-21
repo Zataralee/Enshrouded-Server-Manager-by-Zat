@@ -651,6 +651,37 @@ function renderCurrentWebhooks() {
   target.innerHTML = rows.length ? rows.join("") : `<p>No webhooks are configured for ${escapeHtml(inst.name || "this server")}.</p>`;
 }
 
+let managerUpdateCheckPending = false;
+
+function selectedManagerUpdateChannel() {
+  return document.querySelector("#managerForm").manager_updates_beta.checked ? "beta" : "stable";
+}
+
+async function checkSelectedManagerUpdate() {
+  if (managerUpdateCheckPending || managerUpdatePoll) return;
+  const channel = selectedManagerUpdateChannel();
+  managerUpdateCheckPending = true;
+  state.manager.manager_updates = { ...state.manager.manager_updates, release_state: "unchecked", package_available: false, update_available: false };
+  renderManagerUpdateStatus();
+  try {
+    const result = await api("/api/manager/check-update", { method: "POST", body: JSON.stringify({ channel }) });
+    if (selectedManagerUpdateChannel() !== channel) return;
+    state.manager.manager_updates = result.manager_updates;
+    const messages = {
+      available: "ESM-Z update available",
+      package_missing: "New release found, but its install package is missing",
+      current: "Installed version matches the latest published release",
+      local_newer: "Installed files are newer than the latest published release",
+      installed_pending_restart: "Update installed; restart ESM-Z to finish",
+      error: "Update check failed",
+    };
+    toast(messages[result.manager_updates.release_state] || "Update check completed");
+  } finally {
+    managerUpdateCheckPending = false;
+    renderManagerUpdateStatus();
+  }
+}
+
 function renderManagerUpdateStatus() {
   const updates = (state.manager || {}).manager_updates || {};
   if (activeUpdatePhases.includes(updates.operation?.phase) && !managerUpdatePoll) {
@@ -671,8 +702,11 @@ function renderManagerUpdateStatus() {
   if (installed) installed.textContent = installedVersion ? `v${installedVersion}` : "Unknown";
   if (published) published.textContent = updates.latest_version ? `v${updates.latest_version}` : "Not checked";
   if (checked) checked.textContent = updates.last_checked_at || "Never";
-  if (installButton) installButton.disabled = !(updates.release_state === "available" && updates.package_available);
-  if (bannerInstallButton) bannerInstallButton.disabled = !(updates.release_state === "available" && updates.package_available);
+  const channelChanged = managerFormDirty && selectedManagerUpdateChannel() !== (updates.channel === "beta" ? "beta" : "stable");
+  const canInstall = !channelChanged && !managerUpdateCheckPending && updates.release_state === "available" && updates.package_available;
+  if (installButton) installButton.disabled = !canInstall;
+  if (bannerInstallButton) bannerInstallButton.disabled = !canInstall;
+  document.querySelectorAll('[data-action="checkManagerUpdate"]').forEach(button => { button.disabled = managerUpdateCheckPending; });
   const showBanner = isAdmin() && ["available", "package_missing", "installed_pending_restart"].includes(updates.release_state);
   if (banner) banner.classList.toggle("hidden", !showBanner);
   if (showBanner && bannerTitle && bannerDetail) {
@@ -686,6 +720,13 @@ function renderManagerUpdateStatus() {
       bannerTitle.textContent = `ESM-Z v${updates.latest_version} is available`;
       bannerDetail.textContent = `You are running v${installedVersion}. Review or install the update when ready.`;
     }
+  }
+  if (channelChanged || managerUpdateCheckPending) {
+    title.textContent = managerUpdateCheckPending ? "Checking the selected update channel…" : "Update channel changed";
+    detail.textContent = "Check for Updates uses the beta checkbox directly. No separate Save Manager Settings step is needed.";
+    detail.classList.remove("error");
+    if (channelChanged && published) published.textContent = "Check the selected channel";
+    return;
   }
   if (updates.last_error) {
     title.textContent = "Update check failed";
@@ -1425,18 +1466,7 @@ document.addEventListener("click", async event => {
     if (action === "backup") await api("/api/backup/create", { method: "POST", body: JSON.stringify({ instance_id: selectedInstanceId(), ftp: false }) });
     if (action === "backupFtp") await api("/api/backup/create", { method: "POST", body: JSON.stringify({ instance_id: selectedInstanceId(), ftp: true }) });
     if (action === "checkManagerUpdate") {
-      const result = await api("/api/manager/check-update", { method: "POST" });
-      state.manager.manager_updates = result.manager_updates;
-      renderManagerUpdateStatus();
-      const messages = {
-        available: "ESM-Z update available",
-        package_missing: "New release found, but its install package is missing",
-        current: "Installed version matches the latest published release",
-        local_newer: "Installed files are newer than the latest published release",
-        installed_pending_restart: "Update installed; restart ESM-Z to finish",
-        error: "Update check failed",
-      };
-      toast(messages[result.manager_updates.release_state] || "Update check completed");
+      await checkSelectedManagerUpdate();
       return;
     }
     if (action === "openManagerUpdates") {
@@ -1445,8 +1475,14 @@ document.addEventListener("click", async event => {
     }
     if (action === "installManagerUpdate") {
       if (managerUpdatePoll) return;
+      const channel = selectedManagerUpdateChannel();
+      if (managerUpdateCheckPending || channel !== state.manager.manager_updates.channel
+          || state.manager.manager_updates.release_state !== "available" || !state.manager.manager_updates.package_available) {
+        toast("Check for Updates for the selected channel before installing.");
+        return;
+      }
       if (!confirm("Download, install, and restart ESM-Z? This page will reconnect automatically. Running game servers will not be stopped.")) return;
-      const result = await api("/api/manager/install-update", { method: "POST" });
+      const result = await api("/api/manager/install-update", { method: "POST", body: JSON.stringify({ channel }) });
       reconnectManagerUpdate(result.operation);
       return;
     }
@@ -1571,8 +1607,9 @@ document.querySelector("#managerForm").addEventListener("input", () => {
   managerFormDirty = true;
 });
 
-document.querySelector("#managerForm").addEventListener("change", () => {
+document.querySelector("#managerForm").addEventListener("change", event => {
   managerFormDirty = true;
+  if (event.target.name === "manager_updates_beta") renderManagerUpdateStatus();
 });
 
 document.querySelector("#webhookForm").addEventListener("submit", async event => {

@@ -81,7 +81,9 @@ class SessionAndSafetyTests(unittest.TestCase):
 
 
 class RealRestartTests(unittest.TestCase):
-    def run_scenario(self, broken=False, browser=False):
+    def run_scenario(self, broken=False, browser=False, channel=None):
+        target_version = manager.APP_VERSION[:-1] + ("b" if channel == "beta" else "a") if channel else "99.0.0"
+        running_version = manager.APP_VERSION[:-1] + ("a" if channel == "beta" else "b") if channel else manager.APP_VERSION
         with tempfile.TemporaryDirectory(prefix="esm remote restart ") as temporary:
             root = Path(temporary)
             app = root / "enshrouded_manager"
@@ -93,6 +95,10 @@ class RealRestartTests(unittest.TestCase):
             if eml.exists():
                 shutil.copy2(eml, app / eml.name)
             shutil.copytree(ROOT / "enshrouded_manager" / "static", app / "static")
+            if channel:
+                source = (app / "manager.py").read_text().replace(
+                    f'APP_VERSION = "{manager.APP_VERSION}"', f'APP_VERSION = "{running_version}"')
+                (app / "manager.py").write_text(source)
             (app / "data").mkdir()
             with socket.socket() as probe:
                 probe.bind(("127.0.0.1", 0))
@@ -102,12 +108,15 @@ class RealRestartTests(unittest.TestCase):
             config.update(port=port, allow_local_bypass=False, instances=[], selected_instance_id="",
                           server_root=str(root / "Servers"), backup_root=str(root / "Backups"))
             config["manager_updates"].update(enabled=False, update_available=True, latest_version="99.0.0", package_available=True)
+            if channel:
+                config["manager_updates"].update(channel="stable" if channel == "beta" else "beta",
+                                                 update_available=False, latest_version="", package_available=False)
             config["users"].append(manager.default_user("reader", "reader-pass", role="user", permissions=["logs"]))
             (app / "data" / "manager_config.json").write_text(json.dumps(config))
             (app / "data" / "preserve.txt").write_text("keep")
             package = root / "release.zip"
             source = (app / "manager.py").read_text()
-            source = source.replace(f'APP_VERSION = "{manager.APP_VERSION}"', 'APP_VERSION = "99.0.0"')
+            source = source.replace(f'APP_VERSION = "{running_version}"', f'APP_VERSION = "{target_version}"')
             if broken:
                 source = source.replace('    main()\n', '    raise RuntimeError("deliberate startup failure")\n')
             with zipfile.ZipFile(package, "w") as archive:
@@ -119,7 +128,7 @@ class RealRestartTests(unittest.TestCase):
 import importlib.util, shutil
 spec=importlib.util.spec_from_file_location("fixture", {str(app / 'manager.py')!r})
 m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-m.latest_release_for_host=lambda *a,**k: {{"tag_name":"v99.0.0", "assets":[{{"name":"ESM-Z-PythonRequired-v99.0.0.zip"}}]}}
+m.latest_release_for_host=lambda *a,**k: {{"tag_name":"v{target_version}", "assets":[{{"name":"ESM-Z-PythonRequired-v{target_version}.zip"}}]}}
 m.download_github_asset=lambda asset,destination,**k: shutil.copy2({str(package)!r},destination)
 m.verify_release_checksum=lambda *a,**k: True
 stage=m.install_manager_update
@@ -166,6 +175,15 @@ m.main()
                     request("/api/manager/update-status")
                 self.assertEqual(403, forbidden.exception.code)
                 cookie = admin_cookie
+                if channel:
+                    with self.assertRaises(urllib.error.HTTPError):
+                        request("/api/manager/install-update", {"channel": channel})
+                    checked, _ = request("/api/manager/check-update", {"channel": channel})
+                    self.assertEqual(channel, checked["manager_updates"]["channel"])
+                    self.assertEqual(target_version, checked["manager_updates"]["latest_version"])
+                    self.assertTrue(checked["manager_updates"]["update_available"])
+                    saved = runtime.read_json(app / "data" / "manager_config.json")
+                    self.assertEqual(channel, saved["manager_updates"]["channel"])
                 cross_origin = urllib.request.Request(base + "/api/manager/install-update", data=b"{}",
                     headers={"Cookie": cookie, "Origin": "https://wrong.invalid", "Content-Type": "application/json"})
                 with self.assertRaises(urllib.error.HTTPError) as forbidden:
@@ -175,7 +193,7 @@ m.main()
                     expected = manager.APP_VERSION if broken else "99.0.0"
                     subprocess.run(["node", str(ROOT / "dist" / "verify_remote_update.cjs"), base, password, expected], check=True, timeout=60)
                 else:
-                    accepted, _ = request("/api/manager/install-update", {})
+                    accepted, _ = request("/api/manager/install-update", {"channel": channel} if channel else {})
                     self.assertEqual("waiting", accepted["operation"]["phase"])
                 deadline = time.monotonic() + 25
                 result = None
@@ -190,7 +208,7 @@ m.main()
                     time.sleep(0.2)
                 self.assertIsNotNone(result, (root / "console.log").read_text())
                 self.assertEqual("rolled_back" if broken else "complete", result["operation"]["phase"], result)
-                self.assertEqual(manager.APP_VERSION if broken else "99.0.0", result["version"])
+                self.assertEqual(running_version if broken else target_version, result["version"])
                 self.assertNotEqual(old["boot_id"], result["boot_id"])
                 auth, _ = request("/api/auth/state")
                 self.assertTrue(auth["authenticated"])
@@ -220,3 +238,9 @@ m.main()
 
     def test_failed_start_restores_previous_version_and_session(self):
         self.run_scenario(broken=True)
+
+    def test_check_beta_without_save_then_install_restarts_into_beta(self):
+        self.run_scenario(channel="beta")
+
+    def test_uncheck_beta_without_save_then_install_restarts_into_stable(self):
+        self.run_scenario(channel="stable")
