@@ -1,0 +1,12 @@
+Upstream Enshrouded Mod Loader / Enshrouded Mod Manager CLI 0.2.0
+Project: https://github.com/Brabb3l/kfc-parser
+Release: https://github.com/Brabb3l/kfc-parser/releases/tag/v0.2.0
+Binary: https://github.com/Brabb3l/kfc-parser/releases/download/v0.2.0/emm.exe
+SHA-256: b1133f6b8ea7000596cc7710901bd8307b48165b0e650c0487a611d90ea49305
+
+emm.exe is the unmodified upstream release binary. ESM-Z invokes it as an
+external command. This is not an EML fork. EML is licensed under GPL-3.0;
+see LICENSE and the accompanying source-v0.2.0.zip for its corresponding
+upstream source, Cargo manifests, lockfile, and build configuration.
+
+Additional mods are supplied separately by users and retain their own licenses.

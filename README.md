@@ -4,7 +4,9 @@
 
 The stable release supports Windows hosts. Experimental Linux support is available separately through the `v0.10.0-linux-alpha.7` prerelease and is not production-ready.
 
-Current release: **v0.9.6.1a**
+Current stable release: **v0.9.6.1a**
+
+Windows EML beta: **v0.9.6.1b** — see [beta channel instructions](docs/BETA_CHANNEL.md).
 
 Experimental Linux prerelease: **v0.10.0-linux-alpha.7**
 

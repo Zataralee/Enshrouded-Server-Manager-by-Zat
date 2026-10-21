@@ -26,8 +26,17 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 
-APP_VERSION = "0.9.6.1a"
+APP_VERSION = "0.9.6.1b"
 UPDATE_LOG = [
+    {
+        "version": "0.9.6.1b",
+        "date": "2026-10-20",
+        "changes": [
+            "Added Server Setup & Config > Mods with upstream EML 0.2.0, remote ZIP uploads, mod toggles, configuration editing, and logs.",
+            "Apply Lua patch mods before server start; restore original assets before Steam validation or disabling EML.",
+            "Restricted mod management to admins and stopped servers; failed patches prevent launch.",
+        ],
+    },
     {
         "version": "0.9.6.1a",
         "date": "2026-10-20",
@@ -237,6 +246,8 @@ else:
 SERVER_DIR = ROOT / "Enshrouded Dedicated Server"
 STEAMCMD = ROOT / "Steamcmd" / "steamcmd.exe"
 APP_DIR = ROOT / "enshrouded_manager"
+sys.path.insert(0, str(APP_DIR))
+from eml_support import EML, MAX_UPLOAD
 DATA_DIR = APP_DIR / "data"
 MANAGER_CONFIG = DATA_DIR / "manager_config.json"
 SERVER_CONFIG = SERVER_DIR / "enshrouded_server.json"
@@ -411,7 +422,7 @@ def default_manager_updates():
         "enabled": True,
         "repo": GITHUB_REPO,
         "interval_hours": 24,
-        "channel": "stable",
+        "channel": "beta",
         "github_token": "",
         "last_checked_at": "",
         "latest_version": "",
@@ -760,6 +771,13 @@ class ServerSupervisor:
                 save_json(instance_config_path(self.instance_id), default_server_config(inst["name"], DEFAULT_QUERY_PORT))
                 write_log(f"Created initial enshrouded_server.json for {inst['name']}")
             validate_instance_can_start(self.instance_id)
+            try:
+                eml_for_instance(self.instance_id).apply()
+            except Exception:
+                self.activity = "idle"
+                self.intentional_stop = True
+                update_instance_metadata(self.instance_id, desired_running=False)
+                raise
             creationflags = 0
             if os.name == "nt":
                 creationflags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
@@ -1878,6 +1896,14 @@ def safe_delete_server_directory(server_path):
 
 
 def remove_instance(instance_id, delete_files=False):
+    with supervisor(instance_id).lock:
+        mod_state = eml_for_instance(instance_id).status()
+        if mod_state["enabled"] or mod_state["patched"] or mod_state["recovery_required"]:
+            raise RuntimeError("Disable EML in the Mods tab before removing this instance")
+        return remove_unmodded_instance(instance_id, delete_files)
+
+
+def remove_unmodded_instance(instance_id, delete_files=False):
     sup = SUPERVISORS.get(instance_id)
     if sup and sup.status().get("running"):
         raise RuntimeError("Stop the server before removing this instance")
@@ -2566,6 +2592,11 @@ def install_manager_update():
     channel = str(updates.get("channel") or "auto").strip()
     release = latest_release_for_host(repo, token=token, channel=channel)
     release_version = str(release.get("tag_name") or "").lstrip("v")
+    if not release_version.endswith("b"):
+        for inst in instances():
+            mod_state = eml_for_instance(inst["id"]).status()
+            if mod_state["enabled"] or mod_state["patched"] or mod_state["recovery_required"]:
+                raise RuntimeError("Disable EML in the Mods tab on every instance before returning to a release without EML support.")
     if not (is_newer_version(release_version) or stable_channel_return(release_version, APP_VERSION, channel)):
         raise RuntimeError("The selected GitHub release is not newer than the running ESM-Z version")
     asset = find_release_asset(release)
@@ -2864,14 +2895,21 @@ def restore_instance_steam_manifests(moved):
             shutil.copy2(backup, manifest)
 
 
+def eml_for_instance(instance_id):
+    inst = get_instance(instance_id)
+    return EML(instance_path(inst["id"]), DATA_DIR / "eml" / inst["id"],
+               APP_DIR / "vendor" / "eml-v0.2.0" / "emm.exe")
+
+
 def run_update(instance_id=None, status=None):
     inst = get_instance(instance_id)
     if status:
         status("Waiting for SteamCMD; other server installs or updates may be running")
-    with STEAMCMD_LOCK:
+    with supervisor(inst["id"]).lock, STEAMCMD_LOCK:
         if supervisor(inst["id"]).status().get("running"):
             raise RuntimeError("Stop this server before running its SteamCMD update check.")
         try:
+            eml_for_instance(inst["id"]).prepare_update()
             exe = ensure_steamcmd(status=status)
             target_dir = instance_path(inst["id"])
             log_path = safe_child(target_dir, target_dir / "logs" / "esm-steamcmd.log")
@@ -2905,6 +2943,7 @@ def run_update(instance_id=None, status=None):
             notify_webhook_event("server.update.failed", inst["id"],
                                  message=f"Update check failed for {inst['name']}.", details={"error": str(exc)})
             raise
+        eml_for_instance(inst["id"]).finish_update()
         write_log(f"SteamCMD update check completed for {inst['name']}")
         update_instance_metadata(inst["id"], last_updated_at=now_iso(), last_update_warning="")
         notify_webhook_event("server.updated", inst["id"], message=f"Update check completed for {inst['name']}.")
@@ -3617,6 +3656,17 @@ class Handler(SimpleHTTPRequestHandler):
             if route.path not in {"/api/auth/state"} and not self.require_auth():
                 return
             try:
+                if route.path in {"/api/mods", "/api/mods/config", "/api/mods/log"}:
+                    if not self.require_admin():
+                        return
+                    qs = parse_qs(route.query)
+                    inst = get_instance_for_user(self.current_user(), qs.get("instance_id", [None])[0])
+                    eml = eml_for_instance(inst["id"])
+                    if route.path == "/api/mods/log":
+                        return self.send_json({"content": eml.log()})
+                    if route.path == "/api/mods/config":
+                        return self.send_json(eml.config_file(qs.get("mod_id", [""])[0], qs.get("file", [None])[0]))
+                    return self.send_json(eml.status())
                 if route.path == "/api/auth/state":
                     user = self.current_user()
                     return self.send_json({"authenticated": user is not None, "local": self.is_local(), "config": public_config(user) if user else {}})
@@ -3684,6 +3734,55 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         route = urlparse(self.path).path
         try:
+            if route.startswith("/api/mods/"):
+                if not self.require_admin():
+                    return
+                origin = self.headers.get("Origin")
+                if origin and urlparse(origin).netloc != self.headers.get("Host"):
+                    raise PermissionError("Cross-origin mod changes are not permitted")
+                if config().get("manager_updates", {}).get("restart_required"):
+                    raise RuntimeError("Restart ESM-Z to finish its pending update before changing mods")
+                length = int(self.headers.get("Content-Length", "0"))
+                limit = MAX_UPLOAD if route == "/api/mods/upload" else 2 * 1024 * 1024
+                if not 0 < length <= limit:
+                    raise ValueError("Missing or oversized request body")
+                if route == "/api/mods/upload":
+                    if self.headers.get("Content-Type", "").split(";")[0] != "application/zip":
+                        raise ValueError("Upload an EML ZIP using application/zip")
+                    qs = parse_qs(urlparse(self.path).query)
+                    instance_id = qs.get("instance_id", [None])[0]
+                    body = None
+                else:
+                    if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
+                        raise ValueError("Expected application/json")
+                    body = self.json_body()
+                    instance_id = body.get("instance_id")
+                if not instance_id:
+                    raise ValueError("Select a server first")
+                inst = get_instance_for_user(self.current_user(), instance_id)
+                sup = supervisor(inst["id"])
+                with sup.lock:
+                    if sup.status()["running"]:
+                        raise RuntimeError("Stop the selected server before changing mods")
+                    eml = eml_for_instance(inst["id"])
+                    if route == "/api/mods/upload":
+                        payload = self.rfile.read(length)
+                        if len(payload) != length:
+                            raise ValueError("Incomplete ZIP upload")
+                        result = eml.import_zip(payload)
+                    elif route == "/api/mods/loader":
+                        result = eml.enable(bool(body.get("enabled")))
+                    elif route == "/api/mods/action":
+                        result = eml.change_mod(body.get("mod_id"), body.get("action"))
+                    elif route == "/api/mods/config":
+                        result = eml.config_file(body.get("mod_id"), body.get("file"), body.get("content"))
+                    elif route == "/api/mods/apply":
+                        eml.apply()
+                        result = eml.status()
+                    else:
+                        return self.send_json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
+                write_log(f"EML operation {route} for {inst['name']}")
+                return self.send_json(result)
             if route == "/api/auth/login":
                 body = self.json_body()
                 user = find_user(username=body.get("username", ""))

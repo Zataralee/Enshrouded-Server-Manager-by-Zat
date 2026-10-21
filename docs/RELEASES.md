@@ -6,6 +6,12 @@
 
 Adds Manager > Run beta version, Windows beta selection, four-part version ordering, and return to the paired stable release. No EML integration is installed in stable. See [beta channel instructions](BETA_CHANNEL.md).
 
+## Windows EML Beta
+
+**v0.9.6.1b** - 2026-10-20
+
+Bundles unmodified upstream EML 0.2.0 with its source and license. Adds an admin-only Mods tab with remote ZIP upload, per-mod enable/disable/remove, configuration editing, logs, prelaunch patching, and restore-before-update handling. Supports self-contained Lua patch mods. Individual mods still need multiplayer testing.
+
 ## Previous Release
 
 **v0.9.6** - 2026-10-19

@@ -58,6 +58,7 @@
       <div class="sub-nav-group hidden" data-subnav="server">
         <button data-tab="setup" data-parent-section="server" data-permission="setup">Setup & Instances</button>
         <button data-tab="settings" data-parent-section="server" data-permission="settings">Server Config</button>
+        <button data-tab="mods" data-parent-section="server" data-admin-only="true">Mods (Beta)</button>
         <button data-tab="accounts" data-parent-section="server" data-permission="accounts">Game Server Accounts</button>
         <button data-tab="saves" data-parent-section="server" data-permission="saves">Saves & Backups</button>
         <button data-tab="webhooks" data-parent-section="server" data-permission="settings">Webhooks</button>
@@ -102,6 +103,37 @@
           <div id="scheduleList" class="chips"></div>
         </div>
       </div>
+    </section>
+
+    <section id="mods" class="tab">
+      <div class="panel">
+        <h2>EML Mods <small>Beta</small></h2>
+        <p>Official upstream EML 0.2.0 is included. Enable it for the selected dedicated server, upload a Lua patch mod, then enable the mod. Patches are applied before server start.</p>
+        <p>Only install mods you trust. Multiplayer requirements vary: players may need EML and matching mods on their own computers.</p>
+        <p><a href="https://www.nexusmods.com/games/enshrouded/mods" target="_blank" rel="noopener noreferrer">Find mods on Nexus Mods</a> · <a href="https://github.com/Brabb3l/kfc-parser/releases/tag/v0.2.0" target="_blank" rel="noopener noreferrer">Upstream EML release and source</a></p>
+        <p id="emlStatus" role="status">Select a server to manage mods.</p>
+        <div class="actions">
+          <button id="emlToggle" type="button" disabled>Enable EML</button>
+          <button id="emlApply" type="button" disabled>Apply &amp; Validate Mods</button>
+          <button id="emlRefresh" type="button">Refresh</button>
+          <button id="emlLog" type="button">View EML Log</button>
+        </div>
+        <p class="form-note">Stop the server before changing mods. Disabling EML restores the original game index. Use Dashboard → Update Check to validate or repair game files after an interrupted patch or external game update.</p>
+        <form id="modUploadForm" class="inline">
+          <label>Mod ZIP from this computer <input id="modZip" type="file" accept=".zip,application/zip" required></label>
+          <button id="modUploadButton" type="submit" disabled>Upload &amp; Install Mod</button>
+        </form>
+        <p class="form-note">One EML Lua patch mod per ZIP, up to 32 MiB. Uploads start disabled. Native DLL mods and mods requiring another loader are not supported.</p>
+        <div id="modList" class="list"></div>
+      </div>
+      <div id="modEditor" class="panel hidden">
+        <h2 id="modEditorTitle">Mod configuration</h2>
+        <label>File <select id="modConfigFile"></select></label>
+        <textarea id="modConfigText" rows="18" spellcheck="false" style="width:100%"></textarea>
+        <div class="actions"><button id="modConfigSave" type="button">Save Configuration</button><button id="modConfigClose" type="button">Close</button></div>
+        <p class="form-note">Edits apply on the next patch/start. Lua syntax and compatibility are checked by EML when applying mods.</p>
+      </div>
+      <pre id="emlLogText" class="panel hidden" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
     </section>
 
     <section id="setup" class="tab">
@@ -426,5 +458,6 @@
     <div id="toast"></div>
   </main>
   <script src="/app.js?v=20261019-install-bootstrap"></script>
+  <script src="/mods.js?v=0.9.6.1b"></script>
 </body>
 </html>

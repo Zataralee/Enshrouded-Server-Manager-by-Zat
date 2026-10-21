@@ -11,6 +11,9 @@ def build():
     app = Path(__file__).resolve().parent
     root = app.parent
     version = re.search(r'^APP_VERSION = "([^"]+)"', (app / "manager.py").read_text(), re.M)[1]
+    if version.endswith("b"):
+        from build_eml_vendor import prepare
+        prepare()
     output = root / "dist" / "versions"
     output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="esm-release-") as temporary:
@@ -23,7 +26,7 @@ def build():
         for name in ("README.md", "USER_README.md"):
             shutil.copy2(app / name, target / name)
         shutil.copytree(app / "static", target / "static")
-        if (app / "vendor").exists():
+        if version.endswith("b") and (app / "vendor").exists():
             shutil.copytree(app / "vendor", target / "vendor")
         shutil.copytree(root / "docs", stage / "docs", ignore=shutil.ignore_patterns("MODDING_VIABILITY_*.md"))
         shutil.copy2(root / "README.md", stage / "PROJECT_README.md")
@@ -41,7 +44,8 @@ def build():
     legacy = output / f"EnshroudedServerManager-PythonRequired-v{version}.zip"
     shutil.copy2(archive, legacy)
     for package in (archive, legacy):
-        digest = hashlib.file_digest(package.open("rb"), "sha256").hexdigest()
+        with package.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
         package.with_suffix(".zip.sha256").write_text(f"{digest}  {package.name}\n", encoding="ascii")
     print(archive)
 
