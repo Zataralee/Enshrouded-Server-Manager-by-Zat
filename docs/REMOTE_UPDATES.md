@@ -15,8 +15,8 @@ need the manual file upgrade described in [Beta Channel](BETA_CHANNEL.md).
 
 ## Browser Workflow
 
-1. Open Manager, select the appropriate release channel, and click Check Now.
-2. Click Download & Install Update and confirm.
+1. Open Manager, check or uncheck Run beta version, and click Check for Updates. Starting in 0.9.6.3a/b, no separate Save Manager Settings step is needed.
+2. Click Download, Install & Restart and confirm.
 3. Leave the progress dialog open. It waits for existing installs, backups,
    restarts, and other critical operations, then downloads and verifies the package.
 4. The independent helper replaces manager files only after the old manager exits.
