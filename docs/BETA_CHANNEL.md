@@ -49,6 +49,15 @@ installed. ESM-Z verifies the binary's pinned SHA-256 before invoking the CLI.
    requirements unverified; server-side installation does not prove server-only
    compatibility.
 
+Configuration is edited and saved directly through the browser. For Zat Shock
+Tuning, choose **Configure > File > src/config.lua**, change the numbers, click
+**Save Configuration**, then **Apply & Validate Mods** and start the server.
+The `src/config.defaults.lua` file is a reference copy. ESM-Z 0.9.6.3b initially
+selects the first file alphabetically, which can be `LICENSE.txt`; selecting the
+actual settings file requires no server machine access. The updated editor
+prioritizes live config/settings files automatically and prevents saving stale
+contents after a failed file load.
+
 This beta accepts one mod per ZIP, with `mod.json` and `src/mod.lua`, either at
 ZIP root or under a wrapper folder. Limits are 32 MiB uploaded, 128 MiB expanded,
 and 2,000 entries. Only self-contained mods with `capabilities: ["patch"]` are

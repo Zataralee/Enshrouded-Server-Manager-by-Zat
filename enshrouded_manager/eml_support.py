@@ -26,6 +26,25 @@ MOD_ID = re.compile(r"[a-z][a-z0-9_-]{0,79}\Z")
 TEXT_SUFFIXES = {".json", ".lua", ".toml", ".ini", ".cfg", ".txt"}
 
 
+def config_file_order(relative):
+    """Prefer live settings over backup defaults, scripts and documentation."""
+    path = PurePosixPath(relative.lower())
+    words = set(re.split(r"[._-]", path.stem))
+    if words & {"default", "defaults", "example", "sample", "backup"}:
+        priority = 4
+    elif path.stem in {"config", "settings", "configuration"}:
+        priority = 0
+    elif words & {"config", "settings", "configuration"} or set(path.parts[:-1]) & {"config", "configs", "settings"}:
+        priority = 1
+    elif path.suffix in {".json", ".toml", ".ini", ".cfg"}:
+        priority = 2
+    elif path.suffix == ".lua":
+        priority = 3
+    else:
+        priority = 5
+    return priority, len(path.parts), relative.casefold(), relative
+
+
 def digest(path):
     with Path(path).open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
@@ -333,8 +352,10 @@ class EML:
         root = contained(self.storage, self.storage / "packages" / mod_id)
         files = [p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()
                  and p.suffix.lower() in TEXT_SUFFIXES and p.name != "mod.json" and p.stat().st_size <= MAX_CONFIG]
+        files.sort(key=config_file_order)
+        listing = {"files": files, "default_file": files[0] if files else None}
         if relative is None:
-            return {"files": sorted(files)}
+            return listing
         if relative not in files:
             raise ValueError("Unknown or unsupported mod configuration file")
         target = contained(root, root / relative)
@@ -348,7 +369,7 @@ class EML:
             if state["mods"][mod_id]["enabled"]:
                 active = contained(self.server, self.server / "mods" / mod_id / relative)
                 active.write_text(content, encoding="utf-8")
-        return {"files": sorted(files), "content": target.read_text(encoding="utf-8-sig")}
+        return {**listing, "content": target.read_text(encoding="utf-8-sig")}
 
     def log(self):
         if not self.log_path.exists():

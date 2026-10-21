@@ -170,6 +170,32 @@ class EMLTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.eml.config_file("example", "mod.json", "{}")
 
+    def test_configure_prefers_live_config_over_license_and_defaults(self):
+        self.eml.import_zip(package({
+            'example/LICENSE.txt': 'license', 'example/README.txt': 'instructions',
+            'example/src/config.defaults.lua': 'return {}',
+            'example/src/config.lua': 'return { radius = 7 }',
+        }))
+        result = self.eml.config_file('example')
+        self.assertEqual('src/config.lua', result['default_file'])
+        self.assertEqual('src/config.lua', result['files'][0])
+        self.assertIn('LICENSE.txt', result['files'])
+        self.eml.change_mod('example', 'enable')
+        self.eml.config_file('example', result['default_file'], 'return { radius = 10 }')
+        self.assertEqual('return { radius = 10 }',
+                         (self.server / 'mods/example/src/config.lua').read_text())
+        self.assertEqual('license', self.eml.config_file('example', 'LICENSE.txt')['content'])
+
+    def test_inline_config_mod_opens_script_before_documentation(self):
+        self.eml.import_zip(package({'example/LICENSE.txt': 'license'}))
+        self.assertEqual('src/mod.lua', self.eml.config_file('example')['default_file'])
+
+    def test_named_settings_and_config_directories_precede_other_files(self):
+        from eml_support import config_file_order
+        files = ['LICENSE.txt', 'src/mod.lua', 'config/weapon.lua', 'config.defaults.lua', 'settings.toml']
+        self.assertEqual(['settings.toml', 'config/weapon.lua', 'src/mod.lua', 'config.defaults.lua', 'LICENSE.txt'],
+                         sorted(files, key=config_file_order))
+
     def test_zero_exit_with_upstream_error_is_failure(self):
         def false_success(*args, **kwargs):
             kwargs["stdout"].write(b"ERROR Errors loading some mods\n")
@@ -219,6 +245,19 @@ class ModHTTPTests(unittest.TestCase):
     def test_admin_remote_upload_reaches_selected_instance(self):
         self.assertTrue(self.upload()["installed"])
         self.eml.import_zip.assert_called_once()
+
+    def test_admin_reads_and_saves_config_over_http(self):
+        self.eml.config_file.return_value = {'files': ['src/config.lua'], 'default_file': 'src/config.lua',
+                                           'content': 'return { radius = 7 }'}
+        url = f'http://127.0.0.1:{self.server.server_port}/api/mods/config'
+        with urllib.request.urlopen(url + f'?instance_id={self.instance["id"]}&mod_id=example&file=src%2Fconfig.lua') as response:
+            self.assertEqual('return { radius = 7 }', json.load(response)['content'])
+        body = {'instance_id': self.instance['id'], 'mod_id': 'example', 'file': 'src/config.lua',
+                'content': 'return { radius = 10 }'}
+        request = urllib.request.Request(url, data=json.dumps(body).encode(), headers={'Content-Type': 'application/json'})
+        with urllib.request.urlopen(request) as response:
+            self.assertEqual(200, response.status)
+        self.eml.config_file.assert_called_with('example', 'src/config.lua', 'return { radius = 10 }')
 
     def test_nonadmin_cannot_upload(self):
         self.user = {"id": "user", "role": "user", "permissions": ["setup", "control", "settings"]}

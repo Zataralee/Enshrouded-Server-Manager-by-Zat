@@ -10,7 +10,9 @@
     element("emlToggle").disabled = !stopped;
     element("emlApply").disabled = !stopped || !snapshot.enabled;
     element("modUploadButton").disabled = !stopped;
-    element("modConfigSave").disabled = !stopped || editor?.instanceId !== selected;
+    element("modConfigSave").disabled = !stopped || editor?.instanceId !== selected || !editor?.file;
+    element("modConfigFile").disabled = busy;
+    element("modConfigText").readOnly = !stopped || !editor?.file;
     element("emlToggle").textContent = snapshot.enabled ? "Disable EML & Restore Game" : "Enable EML";
     element("modList").querySelectorAll("button").forEach(button => { button.disabled = !stopped; });
   }
@@ -52,12 +54,12 @@
     }
   }
 
-  async function operation(callback) {
+  async function operation(callback, message = "Working… keep this page open. Patching may take a few minutes.") {
     if (busy) return;
     if (!selected || selected !== selectedInstanceId()) { await refreshMods(); toast("Server selection changed. Review the selected server and retry."); return; }
     busy = true;
     controls();
-    element("emlStatus").textContent = "Working… keep this page open. Patching may take a few minutes.";
+    element("emlStatus").textContent = message;
     try { await callback(); }
     catch (error) { toast(error.message); element("emlLogText").textContent = error.message; element("emlLogText").classList.remove("hidden"); }
     finally { busy = false; await refreshMods(); controls(); }
@@ -93,6 +95,9 @@
     const file = element("modConfigFile").value;
     if (!editor || !file) return;
     const current = editor;
+    editor.file = "";
+    element("modConfigText").value = "";
+    controls();
     const result = await api(`/api/mods/config?${modQuery()}&file=${encodeURIComponent(file)}`);
     if (editor !== current) return;
     element("modConfigText").value = result.content;
@@ -110,6 +115,7 @@
         editor = { instanceId: selected, modId };
         const result = await api(`/api/mods/config?${modQuery()}`);
         element("modConfigFile").innerHTML = result.files.map(file => `<option>${escapeHtml(file)}</option>`).join("");
+        element("modConfigFile").value = result.default_file || result.files[0] || "";
         element("modEditorTitle").textContent = `Configure ${modId}`;
         element("modConfigText").value = "";
         element("modEditor").classList.remove("hidden");
@@ -119,19 +125,19 @@
         if (editor?.modId === modId) { editor = null; editingDirty = false; element("modEditor").classList.add("hidden"); }
         toast("Mod updated; changes apply on the next server start.");
       }
-    });
+    }, action === "configure" ? "Loading mod configuration from the server…" : undefined);
   });
   element("modConfigText").addEventListener("input", () => { editingDirty = true; });
   element("modConfigFile").addEventListener("change", () => {
     if (editingDirty && !confirm("Discard unsaved mod edits?")) { element("modConfigFile").value = editor.file; return; }
-    operation(loadConfig);
+    operation(loadConfig, "Loading mod configuration from the server…");
   });
   element("modConfigSave").addEventListener("click", () => operation(async () => {
-    if (!editor || editor.instanceId !== selected || editor.instanceId !== selectedInstanceId()) throw new Error("Select the original server before saving");
+    if (!editor?.file || editor.instanceId !== selected || editor.instanceId !== selectedInstanceId()) throw new Error("Load a configuration file for the selected server before saving");
     await post("config", { mod_id: editor.modId, file: editor.file, content: element("modConfigText").value });
     editingDirty = false;
-    toast("Mod configuration saved");
-  }));
+    toast("Configuration saved on the server. Apply & Validate Mods, then start the server.");
+  }, "Saving mod configuration on the server…"));
   element("modConfigClose").addEventListener("click", () => {
     if (editingDirty && !confirm("Discard unsaved mod edits?")) return;
     editor = null; editingDirty = false; element("modEditor").classList.add("hidden");

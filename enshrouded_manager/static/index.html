@@ -128,10 +128,11 @@
       </div>
       <div id="modEditor" class="panel hidden">
         <h2 id="modEditorTitle">Mod configuration</h2>
-        <label>File <select id="modConfigFile"></select></label>
-        <textarea id="modConfigText" rows="18" spellcheck="false" style="width:100%"></textarea>
+        <p class="form-note">Edit this mod's settings here. Save Configuration writes directly to the selected server; no server desktop or file access is needed. Settings files open first; the file list also includes scripts and documentation.</p>
+        <label>Configuration file <select id="modConfigFile"></select></label>
+        <textarea id="modConfigText" aria-label="Mod configuration contents" rows="18" spellcheck="false" style="width:100%"></textarea>
         <div class="actions"><button id="modConfigSave" type="button">Save Configuration</button><button id="modConfigClose" type="button">Close</button></div>
-        <p class="form-note">Edits apply on the next patch/start. Lua syntax and compatibility are checked by EML when applying mods.</p>
+        <p class="form-note">Stop the server, edit settings, Save Configuration, then Apply &amp; Validate Mods and start the server. Lua syntax and compatibility are checked when applying mods. Consult the mod's instructions for its settings and defaults.</p>
       </div>
       <pre id="emlLogText" class="panel hidden" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
     </section>
@@ -465,6 +466,6 @@
     <button id="closeUpdateProgress" type="button" hidden>Close</button>
   </dialog>
   <script src="/app.js?v=20261021-remote-update"></script>
-  <script src="/mods.js?v=0.9.6.2b"></script>
+  <script src="/mods.js?v=20261021-config-editor"></script>
 </body>
 </html>
