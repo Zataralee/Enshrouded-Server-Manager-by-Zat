@@ -12,7 +12,8 @@ server=work/'Server'
 spec=importlib.util.spec_from_file_location('eml',ROOT/'enshrouded_manager/eml_support.py')
 eml=importlib.util.module_from_spec(spec);spec.loader.exec_module(eml)
 mod=eml.EML(server,work/'state',ROOT/'enshrouded_manager/vendor/eml-v0.2.0/emm.exe')
-package=ROOT/'dist/mods/Zat-Shock-Tuning-v0.1.0.zip'
+version=json.loads((ROOT/'mods/zat-shock-tuning/mod.json').read_text())['version']
+package=ROOT/f'dist/mods/Zat-Shock-Tuning-v{version}.zip'
 mid='zat-shock-tuning'
 original=eml.digest(server/'enshrouded_server.kfc')
 defaults=(ROOT/'mods/zat-shock-tuning/src/config.lua').read_text()
@@ -43,7 +44,8 @@ try:
     record('Changed configuration applies',index_sha256=patched)
     targets=[]
     for kind,guids in {
-        'ItemInfo':['3cb0ef06','4c425eba','4d0bab0f','d033d5d2','fcf60ecf','bf55416d','5c93fd11','a3ef08e9'],
+        'ItemInfo':['3cb0ef06','4c425eba','4d0bab0f','d033d5d2','fcf60ecf','bf55416d','5c93fd11','a3ef08e9',
+                    '160e2952','a5c0b376','a8268d14','2a96b858','686f82e2','232ca542','d94908b5','e5a01755'],
         'ActorSequenceResource':['12f3cda4'], 'SkillTreeResource':['108ac23f'],
         'TemplateResource':['674340cf'], 'ImpactProgram':['56188199']}.items():
         for guid in guids:targets.append(next((work/'baseline'/kind).glob(guid+'*')).stem)
@@ -92,14 +94,23 @@ try:
         'bf55416d': ['.damageSetup.dmgMod'],
         '108ac23f': ['.nodes[32].configValues.simple[0].$value.value'],
         '674340cf': ['.components[2].$value.colliders[0].dataArray[0].$value.shape.radius'],
+        '160e2952': [], 'a5c0b376': [], 'a8268d14': [], '2a96b858': [],
+        '686f82e2': [], '232ca542': [], 'd94908b5': [], 'e5a01755': [],
     }
     assert len(changed)==len(allowed)
     for name, difference in changed.items():
         assert [entry[0] for entry in difference]==allowed[Path(name).name[:8]],name
-    record('Only expected fields changed across all 12 exported resources')
+    record('Only expected fields changed across all 20 exported resources')
     mod.restore();assert eml.digest(server/'enshrouded_server.kfc')==original
     record('Restore matches original index byte for byte')
-    for name,invalid in [('out of bounds',defaults.replace('spread_radius = 7.0','spread_radius = -1')),
+    for name,invalid in [('negative radius',defaults.replace('spread_radius = 7.0','spread_radius = -1')),
+                         ('negative damage',defaults.replace('eternal_20_damage = 0.5','eternal_20_damage = -1')),
+                         ('float32 overflow',defaults.replace('spread_radius = 7.0','spread_radius = 1e40')),
+                         ('float32 underflow',defaults.replace('spread_radius = 7.0','spread_radius = 1e-50')),
+                         ('infinity',defaults.replace('spread_radius = 7.0','spread_radius = 1/0')),
+                         ('signed integer overflow',defaults.replace('mana = 70','mana = 2147483648')),
+                         ('unsigned integer overflow',defaults.replace('damage_per_intelligence = 2','damage_per_intelligence = 4294967296')),
+                         ('fractional integer',defaults.replace('mana = 70','mana = 70.5')),
                          ('unknown option',defaults.replace('schema_version = 1','unknown_option = 1, schema_version = 1')),
                          ('nonfinite number',defaults.replace('spread_radius = 7.0','spread_radius = 0/0')),
                          ('syntax error',defaults+'!')]:
@@ -120,6 +131,66 @@ try:
     for file in export.rglob('*.json'):
         assert json.loads(file.read_text())==json.loads((repeated/file.relative_to(export)).read_text()),file.name
     record('Repeated apply does not compound changes')
+    above=defaults.replace('targeting_range = 24.0','targeting_range = 60.0').replace('spread_radius = 7.0','spread_radius = 20.0')
+    above=above.replace('damage = 1.12, mana = 70','damage = 4.0, mana = 600')
+    for tier in [20,36,45]:above=above.replace(f'eternal_{tier}_damage = 0.5',f'eternal_{tier}_damage = 5.0')
+    above=above.replace('radius = 15,','radius = 40,').replace('damage_per_intelligence = 2','damage_per_intelligence = 20')
+    mod.config_file(mid,'src/config.lua',above);mod.apply()
+    assert 'Applied 15 setting changes' in last_run_log(),last_run_log()
+    export_above=work/'above-former-caps'
+    with (work/'above-former-caps-export.log').open('w') as log:
+        subprocess.run([str(work/'parser/kfc-parser.exe'),'unpack','-g',str(server),'-o',str(export_above),'-f',','.join(targets)],stdout=log,stderr=subprocess.STDOUT,check=True)
+    def above_read(kind,prefix):return json.loads(next((export_above/kind).glob(prefix+'*')).read_text())
+    item=above_read('ItemInfo','3cb0ef06')
+    assert item['damageSetup']['dmgMod']==4 and item['itemTargetingSetup']['targetingRange']==60
+    assert any(x['$value'].get('value')==600 for x in item['impactValues']['simple'])
+    for prefix in ['bf55416d','5c93fd11','a3ef08e9']:
+        assert above_read('ItemInfo',prefix)['damageSetup']['dmgMod']==5
+    assert above_read('ActorSequenceResource','12f3cda4')['subSequences'][0]['events'][16]['$value']['colliderData']['dataArray'][0]['$value']['shape']['radius']==20
+    assert above_read('SkillTreeResource','108ac23f')['nodes'][32]['configValues']['simple'][0]['$value']['value']==40
+    program=above_read('ImpactProgram','56188199')
+    assert struct.unpack('<f',bytes(program['data'][48:52]))[0]==40
+    assert struct.unpack('<I',bytes(program['data'][240:244]))[0]==20
+    record('Values above every former balance cap are accepted and stored without clamping')
+    all_arrows=defaults
+    variants=[('ice_10','160e2952'),('ice_28','a5c0b376'),('ice_45','a8268d14'),
+              ('fire_15','2a96b858'),('fire_28','686f82e2'),('fire_45','232ca542'),
+              ('bone_36','d94908b5'),('bone_45','e5a01755')]
+    for index,(key,prefix) in enumerate(variants):
+        all_arrows=all_arrows.replace(f'{key}_damage = 0.5',f'{key}_damage = {3+index/4}')
+    mod.config_file(mid,'src/config.lua',all_arrows);mod.apply()
+    assert 'Applied 8 setting changes' in last_run_log(),last_run_log()
+    arrow_export=work/'all-eternal-arrows'
+    with (work/'all-eternal-arrows-export.log').open('w') as log:
+        subprocess.run([str(work/'parser/kfc-parser.exe'),'unpack','-g',str(server),'-o',str(arrow_export),'-f',','.join(targets)],stdout=log,stderr=subprocess.STDOUT,check=True)
+    desired={prefix:3+index/4 for index,(_,prefix) in enumerate(variants)}
+    for file in arrow_export.rglob('*.json'):
+        baseline=json.loads((work/'baseline'/file.relative_to(arrow_export)).read_text())
+        actual=json.loads(file.read_text());prefix=file.name[:8]
+        if prefix in desired:
+            baseline['damageSetup']['dmgMod']=desired[prefix]
+        assert actual==baseline,file.name
+    record('All 8 additional eternal arrow variants tune independently and preserve every other exported field')
+    # Old config shape remains supported; the omitted new arrow section is vanilla.
+    start=defaults.index('    eternal_arrows = {')
+    end=defaults.index('    mass_destruction = {',start)
+    legacy=defaults[:start]+defaults[end:]
+    mod.config_file(mid,'src/config.lua',legacy);mod.apply()
+    assert 'Applied 0 patches' in last_run_log()
+    record('Existing 0.1.0 config shape remains compatible')
+    zero=defaults.replace('targeting_range = 24.0','targeting_range = 0').replace('spread_radius = 7.0','spread_radius = 0').replace('radius = 15,','radius = 0,')
+    mod.config_file(mid,'src/config.lua',zero);mod.apply()
+    assert 'Applied 9 setting changes' in last_run_log(),last_run_log()
+    zero_export=work/'zero-ranges'
+    with (work/'zero-ranges-export.log').open('w') as log:
+        subprocess.run([str(work/'parser/kfc-parser.exe'),'unpack','-g',str(server),'-o',str(zero_export),'-f',','.join(targets)],stdout=log,stderr=subprocess.STDOUT,check=True)
+    item=json.loads(next((zero_export/'ItemInfo').glob('3cb0ef06*')).read_text())
+    assert item['itemTargetingSetup']['targetingRange']==0
+    seq=json.loads(next((zero_export/'ActorSequenceResource').glob('12f3cda4*')).read_text())
+    assert seq['subSequences'][0]['events'][16]['$value']['colliderData']['dataArray'][0]['$value']['shape']['radius']==0
+    prog=json.loads(next((zero_export/'ImpactProgram').glob('56188199*')).read_text())
+    assert struct.unpack('<f',bytes(prog['data'][48:52]))[0]==0
+    record('Zero ranges are accepted and stored without imposing a minimum balance value')
     mod.config_file(mid,'src/config.lua',defaults);mod.apply()
     assert 'Applied 0 patches' in last_run_log()
     record('Reset to default config removes all resource patches')

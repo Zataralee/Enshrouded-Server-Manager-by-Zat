@@ -1,4 +1,4 @@
-Zat Shock Tuning 0.1.0 - SERVER TEST PROTOTYPE
+Zat Shock Tuning 0.1.1 - SERVER TEST PROTOTYPE
 
 Requires ESM-Z beta with upstream EML 0.2.0 and Enshrouded internal revision 1273043.
 Other game revisions are rejected before any changes. See the EML log for the
@@ -12,7 +12,11 @@ establish that unmodified clients use the changed values.
 WHAT WORKS IN THIS PROTOTYPE
 - Chain lightning: initial targeting range, propagation sphere radius, five
   spell variants' raw damage coefficients and mana costs.
-- Three eternal lightning arrow tiers: direct-hit damage coefficients.
+- All 11 eternal arrow variants: independent direct-hit damage coefficients.
+  Ice levels 10/28/45, fire 15/28/45, lightning 20/36/45, and bone 36/45.
+  The lightning_arrows section retains the original lightning settings;
+  eternal_arrows contains the eight ice/fire/bone settings. Each defaults to 0.5.
+  Damage types are preserved: ice, fire, lightning, and physical blunt for bone.
 - Existing Mass Destruction skill: AOE radius and damage per Intelligence.
   Its staff/wand critical-hit requirement and skill requirement remain intact.
 
@@ -34,9 +38,28 @@ INSTALL THROUGH ESM-Z
 
 CONFIGURATION
 Stop the server before editing. Use Configure > src/config.lua, save the file,
-Apply & Validate Mods, and start again. Each option documents its bounds.
-Numbers outside those bounds, missing settings and unknown settings are rejected.
-These are conservative prototype input bounds, not certified safe gameplay limits.
+Apply & Validate Mods, and start again. The config comments suggest tuning ranges;
+these are NOT enforced balance caps. Values above those suggestions are accepted.
+Only numeric validity is enforced: finite nonnegative numbers (zero is accepted),
+integer values for integer fields, and values
+representable in the game's float32/signed32/unsigned32 storage as applicable.
+Unknown or missing settings and incompatible game data are still rejected.
+Representation checks cannot guarantee crash-free gameplay: very large queries
+can be expensive and later damage calculations can overflow. No universal safe
+maximum has been established; increase values incrementally in a test world.
+
+UPGRADING FROM 0.1.0 THROUGH THE BROWSER
+This release removes the previous balance caps and adds eight arrow settings.
+Existing keys/defaults are unchanged; an old config without eternal_arrows is
+accepted and leaves those additional arrows at vanilla values.
+Stop the server. Copy your current src/config.lua text to retain your settings.
+Remove the old mod through ESM-Z, upload the new ZIP, enable it, and paste your
+saved settings into Configure > src/config.lua. To tune the new arrows, merge your
+previous settings into the new config so its eternal_arrows section is retained.
+Save, Apply & Validate Mods, start.
+The current manager does not replace an installed mod through a duplicate upload.
+No server machine access is needed. Removing a mod deletes its stored config,
+so keep the copied text before removing it. No server has been upgraded for you.
 
 To restore defaults, copy all contents of src/config.defaults.lua into src/config.lua.
 The defaults file is documentation only; the mod reads src/config.lua.

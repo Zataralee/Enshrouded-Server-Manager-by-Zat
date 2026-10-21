@@ -3,7 +3,7 @@ Shock Tuning development
 Build from the repository root:
     python mods/build_shock_mod.py
 
-Output: dist/mods/Zat-Shock-Tuning-v0.1.0.zip and a SHA-256 checksum file.
+Output: dist/mods/Zat-Shock-Tuning-v<manifest-version>.zip and a SHA-256 checksum file.
 The ZIP includes a second copy of the vanilla config as src/config.defaults.lua.
 No modified game resources, third-party tools, or server saves are distributed.
 

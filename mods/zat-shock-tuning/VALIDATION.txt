@@ -1,4 +1,4 @@
-Zat Shock Tuning 0.1.0 - validation record, 2026-10-21
+Zat Shock Tuning 0.1.1 - validation record, 2026-10-21
 
 Environment: Windows dedicated server, internal revision 1273043, official
 EML 0.2.0 CLI invoked through ESM-Z's existing EML adapter. The server was a
@@ -10,14 +10,24 @@ Verified:
 - A changed config applies 13 requested setting changes. Exporting the patched
   game data confirms spell damage/mana/targeting, chain sphere radius, lightning
   arrow damage, and the Mass Destruction radius and damage constants.
-- All fields in 12 relevant exported resources were compared with clean data;
-  only the expected fields changed, including two untouched arrow variants.
-- Invalid bounds, unknown options, nonfinite numbers, and Lua syntax errors
+- All fields in 20 relevant exported resources were compared with clean data;
+  only the expected fields changed, including untouched arrow variants.
+- The eight new ice/fire/bone settings were assigned different values and
+  independently decoded. Every other exported field matched the clean data.
+- An old config with the new eternal_arrows section omitted still produces
+  zero resource patches at vanilla settings.
+- Negative settings, float32 overflow/underflow, integer overflow/fractions,
+  unknown options, nonfinite numbers, and Lua syntax errors
   are rejected. The original server index remains restored after each failure.
 - A valid config applies after a rejected config; repeating Apply does not
   compound changes; returning to defaults removes all resource patches.
 - Restore returns the original game index byte for byte.
-- The tuned dedicated server reaches Host_Online and then the Run state.
+- Values above every previous balance cap are accepted and decoded correctly:
+  targeting 60, chain radius 20, spell damage 4, mana 600, arrow damage 5,
+  Mass Destruction radius 40 and damage per Intelligence 20. No clamping occurs.
+- The 0.1.0 tuned dedicated server reached Host_Online and then Run. The same
+  asset paths remain in 0.1.1; above-former-cap values were tested as data patches,
+  not through live gameplay or server startup.
 
 Not verified:
 - Any player connection, combat behavior, damage authority, visual agreement,
@@ -31,6 +41,6 @@ startup with the restored, clean index produced the same diagnostic and also
 reached Run. This diagnostic is not specific to this mod. Successful startup
 is not a certification of error-free gameplay.
 
-The first release intentionally contains no new random AOE trigger. Existing
+This package contains no new random AOE trigger. Existing
 Mass Destruction settings retain the existing skill and critical-hit conditions.
 See README.txt for installation, controlled gameplay tests, and restoration.
