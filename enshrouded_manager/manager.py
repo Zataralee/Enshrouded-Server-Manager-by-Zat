@@ -26,8 +26,17 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 
-APP_VERSION = "0.9.6"
+APP_VERSION = "0.9.6.1a"
 UPDATE_LOG = [
+    {
+        "version": "0.9.6.1a",
+        "date": "2026-10-20",
+        "changes": [
+            "Added a Run beta version checkbox in Manager settings for the Windows beta channel.",
+            "Added four-part version comparison and switching back from beta to its stable release.",
+            "Kept EML integration exclusive to the beta package.",
+        ],
+    },
     {
         "version": "0.9.6",
         "date": "2026-10-19",
@@ -402,7 +411,7 @@ def default_manager_updates():
         "enabled": True,
         "repo": GITHUB_REPO,
         "interval_hours": 24,
-        "channel": "auto",
+        "channel": "stable",
         "github_token": "",
         "last_checked_at": "",
         "latest_version": "",
@@ -419,12 +428,12 @@ def default_manager_updates():
     }
 
 
-def manager_release_state(latest_version, package_available=False, current_version=APP_VERSION):
+def manager_release_state(latest_version, package_available=False, current_version=APP_VERSION, channel="auto"):
     if not latest_version:
         return "unchecked"
     latest = version_parts(latest_version)
     current = version_parts(current_version)
-    if latest > current:
+    if latest > current or stable_channel_return(latest_version, current_version, channel):
         return "available" if package_available else "package_missing"
     if latest == current:
         return "current"
@@ -1023,7 +1032,7 @@ def migrate_config(cfg):
                 cfg["manager_updates"][key] = value
                 changed = True
         pending_version = str(cfg["manager_updates"].get("installed_pending_version") or "")
-        if pending_version and version_parts(pending_version) <= version_parts(APP_VERSION):
+        if pending_version and pending_version == APP_VERSION:
             cfg["manager_updates"]["installed_pending_version"] = ""
             cfg["manager_updates"]["restart_required"] = False
             changed = True
@@ -1486,8 +1495,11 @@ def update_config(patch):
                     updates[key] = incoming[key]
             if "channel" in incoming:
                 channel = str(incoming.get("channel") or "auto").strip().lower()
-                if channel not in {"auto", "stable", "prerelease"}:
-                    raise ValueError("Manager update channel must be auto, stable, or prerelease")
+                if channel not in {"auto", "stable", "prerelease", "beta"}:
+                    raise ValueError("Manager update channel must be auto, stable, prerelease, or beta")
+                if channel != updates.get("channel"):
+                    updates.update(last_checked_at="", latest_version="", latest_url="", last_error="",
+                                   package_available=False, update_available=False, release_state="unchecked")
                 updates["channel"] = channel
             updates.pop("auto_install", None)
             if "interval_hours" in incoming:
@@ -2297,15 +2309,22 @@ def version_parts(version):
     cleaned = str(version or "").strip().lstrip("vV")
     base, separator, prerelease = cleaned.partition("-")
     parts = []
-    for chunk in base.split(".")[:3]:
+    for chunk in base.split(".")[:4]:
         match = re.match(r"\d+", chunk)
         parts.append(int(match.group(0)) if match else 0)
-    while len(parts) < 3:
+    while len(parts) < 4:
         parts.append(0)
     prerelease_numbers = [int(value) for value in re.findall(r"\d+", prerelease)]
     stable_rank = 1 if not separator else 0
     prerelease_revision = prerelease_numbers[-1] if prerelease_numbers else 0
-    return tuple(parts + [stable_rank, prerelease_revision])
+    suffix = re.search(r"([ab])$", base)
+    suffix_rank = {"a": 1, "b": 2}.get(suffix.group(1), 0) if suffix else 0
+    return tuple(parts + [suffix_rank, stable_rank, prerelease_revision])
+
+
+def stable_channel_return(candidate, current, channel):
+    # Only allow an explicit return from our Windows beta to its paired stable build.
+    return channel == "stable" and str(current).endswith("b") and candidate == str(current)[:-1] + "a"
 
 
 def public_manager_updates(source=None):
@@ -2318,10 +2337,11 @@ def public_manager_updates(source=None):
     pending_restart = bool(updates.get("restart_required") and pending_version)
     if updates.get("last_error"):
         release_state = "error"
-    elif pending_restart and version_parts(pending_version) > version_parts(APP_VERSION):
+    elif pending_restart and pending_version != APP_VERSION:
         release_state = "installed_pending_restart"
     else:
-        release_state = manager_release_state(updates.get("latest_version", ""), package_available)
+        release_state = manager_release_state(updates.get("latest_version", ""), package_available,
+                                              channel=updates.get("channel", "auto"))
     updates.update({
         "installed_version": APP_VERSION,
         "release_state": release_state,
@@ -2387,17 +2407,21 @@ def find_release_asset(release):
 
 def release_is_prerelease(release):
     tag = str(release.get("tag_name") or "").strip().lstrip("vV")
-    return bool(release.get("prerelease")) or "-" in tag
+    return bool(release.get("prerelease")) or "-" in tag or bool(re.fullmatch(r"\d+\.\d+\.\d+\.\d+b", tag))
 
 
 def latest_release_for_host(repo, token="", channel="auto", current_version=APP_VERSION):
     channel = str(channel or "auto").strip().lower()
-    include_prereleases = channel == "prerelease" or (channel == "auto" and "-" in str(current_version))
+    include_prereleases = channel in {"prerelease", "beta"} or (channel == "auto" and "-" in str(current_version))
     releases = github_json(f"https://api.github.com/repos/{repo}/releases?per_page=50", token=token)
     candidates = []
     for release in releases if isinstance(releases, list) else []:
         if release.get("draft") or not release.get("tag_name"):
             continue
+        if channel == "beta":
+            tag = str(release["tag_name"]).lstrip("vV")
+            if release_is_prerelease(release) and not re.fullmatch(r"\d+\.\d+\.\d+\.\d+b", tag):
+                continue
         if release_is_prerelease(release) and not include_prereleases:
             continue
         candidates.append(release)
@@ -2436,7 +2460,7 @@ def check_manager_updates(force=False):
         release = latest_release_for_host(repo, token=token, channel=channel)
         tag = str(release.get("tag_name") or "").lstrip("v")
         asset = find_release_asset(release)
-        release_state = manager_release_state(tag, bool(asset))
+        release_state = manager_release_state(tag, bool(asset), channel=channel)
         update_available = release_state in {"available", "package_missing"}
         latest_url = asset.get("browser_download_url", "") if asset else release.get("html_url", "")
         with CONFIG_LOCK:
@@ -2446,7 +2470,7 @@ def check_manager_updates(force=False):
             pending_restart = bool(
                 updates.get("restart_required")
                 and str(updates.get("installed_pending_version") or "") == tag
-                and version_parts(tag) > version_parts(APP_VERSION)
+                and tag != APP_VERSION
             )
             if pending_restart:
                 release_state = "installed_pending_restart"
@@ -2542,7 +2566,7 @@ def install_manager_update():
     channel = str(updates.get("channel") or "auto").strip()
     release = latest_release_for_host(repo, token=token, channel=channel)
     release_version = str(release.get("tag_name") or "").lstrip("v")
-    if not is_newer_version(release_version):
+    if not (is_newer_version(release_version) or stable_channel_return(release_version, APP_VERSION, channel)):
         raise RuntimeError("The selected GitHub release is not newer than the running ESM-Z version")
     asset = find_release_asset(release)
     if not asset:

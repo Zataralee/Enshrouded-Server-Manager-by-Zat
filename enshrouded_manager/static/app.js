@@ -559,7 +559,7 @@ function renderManagerForm() {
   f.manager_updates_enabled.checked = updates.enabled !== false;
   f.manager_updates_repo.value = updates.repo || "Zataralee/Enshrouded-Server-Manager-by-Zat";
   f.manager_updates_interval_hours.value = updates.interval_hours || 24;
-  f.manager_updates_channel.value = updates.channel || "auto";
+  f.manager_updates_beta.checked = updates.channel === "beta";
   f.manager_updates_github_token.placeholder = updates.github_token ? "Saved token hidden; leave blank to keep current" : "GitHub token for private repo";
   f.manager_updates_clear_github_token.checked = false;
   renderManagerUpdateStatus();
@@ -1466,7 +1466,7 @@ document.querySelector("#managerForm").addEventListener("submit", async event =>
       enabled: data.has("manager_updates_enabled"),
       repo: data.get("manager_updates_repo"),
       interval_hours: Number(data.get("manager_updates_interval_hours") || 24),
-      channel: data.get("manager_updates_channel") || "auto",
+      channel: data.has("manager_updates_beta") ? "beta" : "stable",
       github_token: data.get("manager_updates_github_token"),
       clear_github_token: data.has("manager_updates_clear_github_token"),
     },

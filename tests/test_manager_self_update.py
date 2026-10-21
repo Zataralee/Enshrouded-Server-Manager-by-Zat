@@ -16,6 +16,30 @@ SPEC.loader.exec_module(manager)
 
 
 class ManagerSelfUpdateTests(unittest.TestCase):
+    def test_four_part_and_letter_versions_are_ordered(self):
+        versions = ["0.9.6", "0.9.6.1a", "0.9.6.1b", "0.9.6.2a", "0.9.7", "0.10.0-linux-alpha.7", "0.10.0"]
+        self.assertEqual(versions, sorted(reversed(versions), key=manager.version_parts))
+
+    def test_beta_checkbox_channel_excludes_linux_alpha(self):
+        releases = [
+            {"tag_name": "v0.10.0-linux-alpha.7", "prerelease": True},
+            {"tag_name": "v0.9.6.1a", "prerelease": False},
+            {"tag_name": "v0.9.6.1b", "prerelease": True},
+            {"tag_name": "v0.9.6.2b", "prerelease": True, "draft": True},
+        ]
+        with mock.patch.object(manager, "github_json", return_value=releases):
+            self.assertEqual("v0.9.6.1b", manager.latest_release_for_host("owner/repo", channel="beta")["tag_name"])
+            self.assertEqual("v0.9.6.1a", manager.latest_release_for_host("owner/repo", channel="stable")["tag_name"])
+
+    def test_beta_is_excluded_even_if_github_prerelease_flag_is_missing(self):
+        self.assertTrue(manager.release_is_prerelease({"tag_name": "v0.9.6.1b"}))
+        self.assertFalse(manager.release_is_prerelease({"tag_name": "v0.9.6.1a"}))
+
+    def test_explicit_return_to_paired_stable_is_available(self):
+        self.assertEqual("available", manager.manager_release_state("0.9.6.1a", True, "0.9.6.1b", "stable"))
+        self.assertEqual("local_newer", manager.manager_release_state("0.9.6.1a", True, "0.9.6.1b", "beta"))
+        self.assertEqual("local_newer", manager.manager_release_state("0.9.5", True, "0.9.6.1b", "stable"))
+
     def test_stable_auto_channel_ignores_prereleases(self):
         releases = [
             {"tag_name": "v0.10.0-linux-alpha.3", "draft": False, "prerelease": True},

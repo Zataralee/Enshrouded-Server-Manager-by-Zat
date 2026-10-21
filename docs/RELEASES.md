@@ -2,6 +2,12 @@
 
 ## Current Release
 
+**v0.9.6.1a** - 2026-10-20
+
+Adds Manager > Run beta version, Windows beta selection, four-part version ordering, and return to the paired stable release. No EML integration is installed in stable. See [beta channel instructions](BETA_CHANNEL.md).
+
+## Previous Release
+
 **v0.9.6** - 2026-10-19
 
 Package:
