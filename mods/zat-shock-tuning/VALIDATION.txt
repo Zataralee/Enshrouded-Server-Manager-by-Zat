@@ -1,126 +1,74 @@
-Zat Shock Tuning 0.2.0-alpha.3 - diagnostic validation, 2026-10-21
+Zat Shock Tuning 0.3.0-alpha.1 validation - 2026-10-21
 
-Scope: adds one RVM yield between secondary ApplyDamage and the existing
-hit-history guards. No fan-out, nearest-first selection, new spell propagation,
-or projectile-lifetime change is implemented. No live server/client changed.
+IMPLEMENTED SCOPE
+Nearest-first branching in eternal shock-arrow tiers 20/36/45 and opt-in
+propagation for the five player chain-lightning spells. Shared generation queue,
+pending-target reservations, completed native hit history and per-spreader 3D
+radius. Existing raw damage, mana and other scalar controls retained.
+max_jumps remains the total secondary-target budget; 0 removes that budget.
 
-Field evidence: user reports alpha.2 restored arrow damage and produced one
-secondary hit. This is user-reported combat evidence, not our automated test.
+AUTOMATED RESULTS
+77 checks passed: 26 arrow/regression checks, 28 fan-out checks, 23 scalar checks.
+EML 0.2.0 was invoked through ESM-Z's existing adapter in a disposable revision
+1273043 dedicated-server fixture. The archive imported, configured and applied;
+upstream kfc-parser exported/disassembled the actual patched programs. Native
+branch/type/stack audits pass. Original program bodies/data remain unchanged
+except for two redirected branch operands in each program. The spell changes
+are gated by one added boolean in the selected player casting sequence; its
+shared program default is false. Default configuration produces zero patches.
 
-Read-only native inspection of revision 1273043 dedicated-server executable:
-SHA256 d7baa768eb00aa895d9f5a1cd8747ccf66858c7b542f50983092b2e3261588ee
-- ApplyDamage wrapper RVA 1779f0 allocates/enqueues damage work at 17a107-17a27a.
-- Impact hit-history insertion routine RVA 98e4c0 updates the hash set and count.
-- A separate damage-processing path invokes it at RVA 18bb18.
-- IsConsecutiveHit uses that set; GetConsecutiveHitCount reads its live count.
-Thus a successful ApplyDamage return does not establish that history has
-already advanced. This is a concrete mismatch in the old test model.
+Modeled execution covers:
+- Adversarial far-first query order; nearest-first selection in both programs.
+- 3D distances including elevation and deterministic equal-distance ID ties.
+- Three children followed by nine grandchildren from each parent's position.
+- Converging branches: a pending victim cannot be selected twice.
+- Independent arrow-tier fan-out and shared total-victim budgets.
+- Initial and secondary killing hits retaining their recorded origin.
+- Blocked/rejected candidates not causing an endless retry or blocking others.
+- 1,100-target lines exceeding the ring's capacity through slot reuse.
+- Missing native history stopping propagation without repeating hits.
+- Full-width entity IDs beyond 2^24 and 2^31, copied without float rounding.
+- Full uint32 fan-out and jump settings accepted without balance clamping.
+- A finite budget waits for submitted damage before destroying the source.
+- Native frontier exhaustion stops before an out-of-bounds write.
+- Unsupported input, negative/fractional/nonfinite/overflowing fan-out rejected.
+- Previous alpha.1 ItemId-load defect and alpha.2 immediate-history defect remain
+  reproducible using their original packages. The new package passes both fixes.
+- Existing scalar integration, independent fields, legacy configs, apply recovery,
+  repeat apply and byte-for-byte restoration of the original game index.
 
-The revised harness models damage completion on RVM. It is NOT a native engine
-integration test and cannot prove that one RVM is sufficient in every context.
-The original alpha.2 package must stop after one secondary hit in the deferred
-model, while still passing the old immediate-history model. The new package
-must pass both and keep the no-history fail-closed test.
+The harness executes emitted bytecode but MODELS the native functions. It is
+not a combat test and does not prove multiplayer authority or VFX replication.
+The game queries, timing, entity ownership and actual damage still require play.
 
-Current alpha.3 validation: 26 chain checks and 23 scalar checks passed.
-- Original alpha.1 native ItemId-load regression remains detected.
-- Original alpha.2 reproduces one hop with deferred history, three with immediate.
-- Alpha.3 propagates in both modeled schedules and stops safely without history.
-- Complete emitted-program branch/type/stack audit passes (maximum 25 of 256).
-- ESM-Z adapter import/configure/apply/export/reapply/restore checks pass.
-- Existing scalar tuning and exact baseline restoration checks pass.
-- No real client combat or new native server startup was run for alpha.3.
+NATIVE EVIDENCE
+Read-only inspection used dedicated-server revision 1273043 executable SHA256
+ d7baa768eb00aa895d9f5a1cd8747ccf66858c7b542f50983092b2e3261588ee
+- ApplyDamage queues work; native hit history is updated by damage processing.
+- GLoad/GStore reject ItemId/EntityId structs. Scalar aliases share their bytes.
+- ILT is signed; unsigned ordering uses a wrapping sign-bit adjustment.
+- Native AddValues/SubValues convert numeric scalars through float32. They are
+  suitable for position deltas, not full-width entity IDs. The selected ID is
+  written by a native query output and verified before damage is submitted.
+- FromTransform.position returns world coordinates; referenceTransform does not
+  subtract them. X/Y/Z deltas are computed explicitly before GetLength.
+- Impact code/stack indices and data offsets have native 16-bit representation.
+  Frontier allocation derives from remaining storage; it is not a balance cap.
+  All-arrow unlimited branching holds 996 pending spreaders; spells hold 989.
+  The original arrow lifetime remains five seconds. No map-wide guarantee.
 
-Required combat retest: upload alpha.3 through ESM-Z to the test server; preserve
-the working config, enable one tier, use max_jumps = 2, and hit a group with at
-least three enemies in range. Check actual health loss on the two secondary
-enemies, not only VFX. Also check an unrelated arrow still deals direct damage.
-If the chain still stops after one, retain the history guard and investigate
-native update timing/root identity; no full branching release is claimed.
+STARTUP CHECK
+An isolated loopback-only, password-protected server with fresh disposable world,
+all three arrow tiers enabled, spell propagation enabled and fan-out 3 reached
+Host_Online and Run. Its process was then stopped, and the original fixture
+server config and game index restored. See the local fanout-startup-result.json
+for the exact final package check. No real clients connected or combat exercised.
+No production server, installed game client, or user save was changed.
 
-Historical alpha.2 validation follows (counts below refer to alpha.2):
-
-Zat Shock Tuning 0.2.0-alpha.2 - validation record, 2026-10-21
-
-Alpha.1 field report: enabling one chain tier removed arrow damage. Disabling
-that tier restored it. Native executable inspection found that GLoad rejects
-ItemId (0x5bfc0dbb), which the alpha.1 ammunition gate loaded before direct damage.
-The native VM supports IEQ; the problem is the load's type, not the equality opcode.
-Alpha.2 uses a uint32 view at the same ItemId.value memory offset. The test model
-now enforces native GLoad/GStore type restrictions and shared-memory aliases.
-This resolves a concrete bytecode defect; it is not a claim of a successful
-live multiplayer combat retest.
-
-Environment: Windows dedicated server, internal revision 1273043, official
-EML 0.2.0 CLI invoked through ESM-Z's existing EML adapter. The server was a
-separate Steam-validated installation with an isolated test world and port.
-
-Existing scalar integration: 23 checks passed with this package.
-- The upload ZIP imports, enables, and exposes src/config.lua in ESM-Z's adapter.
-- Vanilla defaults produce zero modified-resource patches.
-- A changed config applies 13 requested setting changes. Exporting the patched
-  game data confirms spell damage/mana/targeting, chain sphere radius, lightning
-  arrow damage, and the Mass Destruction radius and damage constants.
-- All fields in 20 relevant exported resources were compared with clean data;
-  only the expected fields changed, including untouched arrow variants.
-- The eight new ice/fire/bone settings were assigned different values and
-  independently decoded. Every other exported field matched the clean data.
-- An old config with the new eternal_arrows section omitted still produces
-  zero resource patches at vanilla settings.
-- Negative settings, float32 overflow/underflow, integer overflow/fractions,
-  unknown options, nonfinite numbers, and Lua syntax errors
-  are rejected. The original server index remains restored after each failure.
-- A valid config applies after a rejected config; repeating Apply does not
-  compound changes; returning to defaults removes all resource patches.
-- Restore returns the original game index byte for byte.
-- Values above every previous balance cap are accepted and decoded correctly:
-  targeting 60, chain radius 20, spell damage 4, mana 600, arrow damage 5,
-  Mass Destruction radius 40 and damage per Intelligence 20. No clamping occurs.
-- Above-former-cap values were tested as decoded data patches, not live combat.
-
-Arrow chain checks: 24 passed (integration, structural checks and modeled native calls).
-- The original alpha.1 ZIP with the exact reported settings reproduces a native
-  type rejection before direct damage for enabled and unrelated ammunition IDs.
-- Alpha.2 with those same settings passes the type audit and returns to the
-  original direct-hit path for all tested IDs. The modeled chain is exclusive to
-  level 45, with the requested radius 48, damage 3 and jump limit 20 retained.
-- Disabling chains in that config restores the complete original projectile
-  program while preserving the independent item/spell tuning.
-- Default ZIP imports with src/config.lua selected by the manager adapter.
-- Chains disabled produces no patches. All three tiers enabled modifies one
-  existing Impact program, retaining its resource ID and all original data and
-  layout entries. Only two original branch operands are redirected; original
-  direct-hit instructions and the unrelated paths remain in place.
-- Upstream kfc-parser successfully disassembles the patched program and shutdown
-  path. Branch destinations/data operands are valid and stack heights agree at
-  joins. Maximum analyzed stack height is 25 against capacity 256.
-- Repeated apply produces identical decoded content, with no compounding.
-- Zero chance or zero spread removes the chain program patch.
-- Invalid probabilities, fractional/overflowing limits, nonboolean switches and
-  negative damage are rejected, retaining the original game index.
-- The emitted bytecode was executed with MODELED native game calls. Scenarios
-  cover unrelated ammunition, blocked hits, all three arrow IDs, changing origin,
-  initial killing hits, no ping-pong with native hit-history assumptions, stopping
-  if hit history fails to record a victim, radius, damage, chance pass/fail,
-  finite jump limits and independent tier switches. These are not engine combat
-  results; the model's native semantics remain assumptions to verify in play.
-- The previous alpha.1 isolated loopback dedicated server with all three chains enabled reached
-  Host_Online and Run in 12.1 seconds. No clients connected and no arrows fired.
-  Its temporary config was restored, process stopped, and game index restored
-  byte for byte. No production server or installed client was patched.
-
-Not verified:
-- Any player connection, combat behavior, damage authority, visual agreement,
-  balance, or compatibility with other mods.
-- Server-only operation with unmodified clients. This is the next test gate.
-- Remote browser upload on the user's particular beta manager installation;
-  package handling was tested through the same Python adapter.
-
-The startup log contains a missing Benchmark component diagnostic. A second
-startup with the restored, clean index produced the same diagnostic and also
-reached Run. This diagnostic is not specific to this mod. Successful startup
-is not a certification of error-free gameplay.
-
-This package contains an experimental chance-based arrow chain, not a circular
-AOE trigger. Existing Mass Destruction settings retain their skill/crit conditions.
-See README.txt for installation, controlled gameplay tests, and restoration.
+NEXT PLAY TEST
+Use unmodified clients. With fan-out 1, place one enemy beside the initial victim
+and another farther away within radius; verify actual health loss follows the
+closer enemy first. Then set fan-out 3 and verify each first-generation victim
+can reach its own children outside the initial victim's radius. Check converging
+branches, killing hits, finite total budgets, other arrow tiers, and a chain
+spell. Repeat with two players to verify independent casts and attribution.

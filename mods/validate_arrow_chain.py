@@ -83,7 +83,7 @@ def main():
         assert 'Applied 0 patches' in log()
         baseline, _ = export('chain-baseline')
         record('ZIP imports, editable config is default, disabled chains leave zero patches')
-        enabled = defaults.replace('enabled = false', 'enabled = true')
+        enabled = defaults.replace('enabled = false, chance_percent', 'enabled = true, chance_percent')
         mod.config_file(mid, 'src/config.lua', enabled); mod.apply()
         assert 'Applied 1 patches' in log(), log()
         p, text = export('chain-enabled')
@@ -105,11 +105,11 @@ def main():
         assert repeated == p
         record('reapplying reconstructs identical decoded program without compounding')
         mixed = enabled.replace(
-            'eternal_20 = { enabled = true, chance_percent = 100, spread_radius = 7.0, damage = 0.5, max_jumps = 0 }',
-            'eternal_20 = { enabled = true, chance_percent = 25, spread_radius = 7.0, damage = 9, max_jumps = 2 }')
+            'eternal_20 = { enabled = true, chance_percent = 100, spread_radius = 7.0, damage = 0.5, max_jumps = 0, targets_per_spread = 1 }',
+            'eternal_20 = { enabled = true, chance_percent = 25, spread_radius = 7.0, damage = 9, max_jumps = 2, targets_per_spread = 1 }')
         mixed = mixed.replace(
-            'eternal_36 = { enabled = true, chance_percent = 100, spread_radius = 7.0, damage = 0.5, max_jumps = 0 }',
-            'eternal_36 = { enabled = true, chance_percent = 100, spread_radius = 7.0, damage = 3, max_jumps = 1 }')
+            'eternal_36 = { enabled = true, chance_percent = 100, spread_radius = 7.0, damage = 0.5, max_jumps = 0, targets_per_spread = 1 }',
+            'eternal_36 = { enabled = true, chance_percent = 100, spread_radius = 7.0, damage = 3, max_jumps = 1, targets_per_spread = 1 }')
         mixed = mixed.replace('eternal_45 = { enabled = true', 'eternal_45 = { enabled = false')
         mod.config_file(mid, 'src/config.lua', mixed); mod.apply()
         profile, assembly = export('chain-mixed')

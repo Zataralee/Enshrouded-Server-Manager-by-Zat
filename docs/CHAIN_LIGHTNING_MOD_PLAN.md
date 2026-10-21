@@ -52,69 +52,51 @@ Several deceptively similar controls must remain distinct:
 
 ## Proposed user settings
 
-### Recursive propagation requested on October 21
+### Nearest first fan out implemented in 0.3.0 alpha 1
 
-The next behavior revision should use the same propagation rules for all five
-player chain-lightning spells and all three configurable eternal shock arrows:
+The same propagation emitter now serves eternal shock arrows (20/36/45) and the
+five player chain-lightning spells. It explicitly ranks eligible targets by 3D
+distance from each spreader's recorded position. `targets_per_spread` selects how
+many nearest unvisited targets each parent can reach: one for linear, three for
+branching. All parents in a generation act before the next generation spreads.
+Pending-target reservations and native completed-hit history prevent duplicate
+hits when branches converge. Killing hits retain their pre-damage positions.
 
-- `spread_radius` is measured from the current spreader's recorded hit position.
-- `targets_per_spread` selects up to that many nearest eligible, unvisited enemy
-  roots. One gives a linear chain; three gives branching. Selecting a target must
-  reserve it for the entire cast before another branch can select it.
-- Each successfully hit, unblocked target becomes a spreader. Record its position
-  before damage so a killing hit can still propagate.
-- `max_jumps = 0` removes the configured propagation count limit. Finite values
-  currently count secondary victims; the user has been asked whether branching
-  should retain that meaning or count generations instead. This is unresolved.
-- One probability roll starts an arrow chain. Branches share visited state and
-  the limit; they do not roll again or reset the budget. Different shots/casts
-  have independent state. Initial victims, the caster and allies are excluded.
-- Finish when no pending spreaders remain or a configured limit is reached.
-  No hidden balance cap should substitute for zero. Queries can only reach
-  entities loaded and available to the engine; they cannot activate the whole map.
+`max_jumps` retains the existing total-secondary-victim meaning across the entire
+cast, excluding the initial hit. Zero removes the configured total-target budget.
+Arrow profiles missing `targets_per_spread` default to one. Spells opt in through
+`chain_lightning.propagation = { enabled=true, targets_per_spread=3, max_jumps=0 }`;
+its absence retains vanilla propagation. The player's chosen casting sequence
+supplies a boolean flag so unrelated users of the shared spell program bypass
+the new behavior. Existing scalar damage, mana and radius settings are retained.
 
-These are requirements, not configuration keys accepted by alpha.3. Do not add
-`targets_per_spread` to a deployed config until its native consumer exists.
+The native engine does not sort the faction query by nearest distance. The new
+emitter scans results, computes X/Y/Z deltas and selects the nearest candidate;
+query enumeration order no longer wins. Equal-distance ties use unsigned entity
+ID order. A successful hit is queued as a future spreader. A strict rank cursor
+avoids endlessly retrying a rejected candidate. A final partial generation waits
+for queued damage before destroying the source effect.
 
-Alpha.2 field feedback established working direct damage but only one secondary
-hit. Native revision 1273043 inspection shows ApplyDamage queues work and the
-damage processor inserts hit history later. The old mock inserted history
-immediately. Alpha.3 is a diagnostic that adds one RVM yield before the existing
-history guards; the old package now reproduces the one-hop symptom in a deferred
-history model. A real-server retest must establish whether one update suffices.
-This remains a likely cause, not a confirmed live fix.
+Alpha.3 improved propagation in the user's combat report after adding an engine
+update before checking hit history. The current implementation retains delayed
+history handling. The regression harness now models that timing instead of
+assuming immediate history insertion.
 
-Branching requires a pending-spreader queue and a shared visited/reserved set.
-EML startup Lua is not a runtime callback, and the current Impact extension has
-neither structure. The native VM uses 16-bit instruction/stack indices and
-16-bit data-layout offsets; blindly emitting recursive frames or a fixed array
-would introduce storage limits and overflow risks. A finite scratch allocation
-must not silently become an advertised unlimited total-hit count.
+This implementation still runs inside existing native Impact programs. Their
+16-bit storage offsets bound the concurrent frontier: all-arrow unlimited
+branching allocates 996 pending records, and the spell program allocates 989.
+These are reusable slots, not total-victim caps; emitted bytecode traverses a
+1,100-target line in the model. Frontier exhaustion stops safely. The original
+arrow lifetime also remains in effect. Do not claim guaranteed map-spanning
+propagation; only loaded/queryable enemies are available to native queries.
 
-The arrow also has a five-second native lifetime. Yielding on each hop may make
-that lifetime terminate a long chain. A controller independent of the original
-projectile needs investigation before promising propagation until exhaustion.
-Removing lifetime limits from flying/missed arrows is not an acceptable fix.
-New controller resources would require renewed unmodified-client compatibility
-testing. The existing shared spell program has other sequence users; changing
-its behavior must be gated to the five player spell items.
-
-Acceptance cases for the eventual implementation:
-
-| Case | Required observation |
-| --- | --- |
-| Line extending beyond the first radius | Every next target is selected from its predecessor's radius |
-| Query enumerates farthest first | Nearest eligible targets still win |
-| Fan-out three with distinct branches | First spread reaches three; each can produce three successors |
-| Branches converge or form a cycle | Each enemy root is hit once per cast, including pending hits |
-| Zero limit on a long path | No configured hop stop or fixed total-hit scratch-array ceiling |
-| Initial or secondary killing hit | Recorded position can seed the next spread |
-| Blocked, rejected or unavailable victim | No unconfirmed new spreader; other branches can continue |
-| Simultaneous players and casts | Independent state, budgets and damage ownership |
-| Mod disabled or unrelated ammunition/sequence | Original direct-hit paths and behavior remain intact |
-
-Alpha.3 does not implement nearest ordering, branching or changed spell control.
-It is packaged separately for the focused deferred-hit-history combat test.
+Current validation covers adversarial target order, elevation, three then nine
+branches, convergence, killed victims, rejected hits, full-width IDs, finite
+shared budgets and queue reuse for arrows and spells. Integration uses the real
+EML package and exported programs, but combat functions are modeled. An isolated
+native server startup succeeds; the new targeting/fan-out still needs testing
+with unmodified clients and actual health-loss observation. No native combat
+certification is inferred from startup or mock results.
 
 Use three independently enabled sections. Existing effects default to vanilla; the new on-hit burst defaults to disabled. Store shared defaults with per-family and per-item overrides. Configuration is applied while the server is stopped and takes effect at startup.
 

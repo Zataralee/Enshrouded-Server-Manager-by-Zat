@@ -110,7 +110,10 @@ if revision ~= "1273043" then
     fail("Unsupported game revision " .. tostring(game.version) .. "; this prototype supports 1273043 only")
 end
 local chain, arrows, aoe = config.chain_lightning, config.lightning_arrows, config.mass_destruction
-keys(chain, {targeting_range=true, spread_radius=true, spells=true}, "chain_lightning")
+if type(chain)=="table" and chain.propagation==nil then
+    chain.propagation={enabled=false,targets_per_spread=1,max_jumps=0}
+end
+keys(chain, {targeting_range=true, spread_radius=true, spells=true, propagation=true}, "chain_lightning")
 keys(chain.spells, {eternal_10=true, consumable_12=true, eternal_28=true, eternal_45=true, consumable_47=true}, "spells")
 keys(arrows, {eternal_20_damage=true, eternal_36_damage=true, eternal_45_damage=true}, "lightning_arrows")
 keys(config.eternal_arrows, {ice_10_damage=true, ice_28_damage=true, ice_45_damage=true,
@@ -200,6 +203,9 @@ program_scalar(program, 4130293191, "BaseDamge::value", 848563180, "<I4", 2, aoe
 local chain_change = require("arrow_chain").plan(config.arrow_chain,
     {fail=fail,keys=keys,number=number,resource=resource})
 if chain_change then changes[#changes+1]=chain_change end
+local spell_change=require("spell_chain").plan(chain.propagation,chain.spread_radius,cast,
+    {fail=fail,keys=keys,number=number,resource=resource})
+if spell_change then changes[#changes+1]=spell_change end
 print("[Zat Shock Tuning] Validated revision " .. revision .. ", " .. checked .. " baseline fields")
 for _, change in ipairs(changes) do
     print("[Zat Shock Tuning] " .. change.label .. ": " .. change.before .. " -> " .. change.after)

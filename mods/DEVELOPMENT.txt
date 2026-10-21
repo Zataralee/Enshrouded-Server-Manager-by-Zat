@@ -56,3 +56,33 @@ values. Native GLoad/GStore accept only uint32, sint32, float32, bool and Time.
 ItemId is a struct even though its value occupies four bytes. Model aliases must
 share memory offsets, not independent dictionary values. A successful parse,
 balanced stack and boot do not establish a valid native type at execution time.
+
+Nearest-first fan-out (0.3.0-alpha.1):
+    python mods/validate_chain_fanout.py --fixture-dir <absolute-fixture-directory>
+
+impact_builder.lua appends typed storage and emitted instructions. The shared
+chain_propagation.lua implements a breadth-first circular frontier for both
+arrow_chain.lua and spell_chain.lua. They each hook two native branch operands.
+The spell sequence supplies a new BoolImpactConfig so other sequences sharing
+that program retain its original path. No new game resource IDs are introduced.
+
+The frontier is bounded by native 16-bit data offsets, NOT a configured total-hit
+limit. Slots are reused. Capacity is logged; a full frontier stops before a write.
+The engine's projectile lifetime still applies. Do not claim map-wide propagation.
+All parents in one generation submit their children before RVM, and the final
+partial generation yields before destroying the Impact. Pending IDs reserve
+victims before native damage history is visible; never clear native hit history.
+
+Important native semantics verified from revision 1273043:
+- FromTransform.position returns world coordinates even with referenceTransform;
+  compute the three coordinate deltas explicitly for distance.
+- Generic AddValues/SubValues scalar math uses float32, including uint32 inputs.
+  Never use it to copy IDs. Re-fetch the selected query index directly into the
+  ring's EntityId output and verify identity before accepting it.
+- Native ILT is signed. Uint32 ordering flips the sign bit with wrapping IAdd.
+- Load ItemId/EntityId values only through uint32 views sharing the same bytes.
+
+Tests use byte-addressed storage for aliases and dynamic ECall pointers, model
+queued damage on RVM, and include IDs above 2^24/2^31. The upstream disassembler
+accepts IConst variable references but panics on scalar IConst even though the
+native VM accepts it; numeric constants therefore use typed data + GLoad.
