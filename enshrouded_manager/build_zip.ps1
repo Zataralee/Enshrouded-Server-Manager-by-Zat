@@ -12,6 +12,7 @@ Copy-Item -LiteralPath (Join-Path $Root "Steamcmd") -Destination $Stage -Recurse
 New-Item -ItemType Directory -Force -Path (Join-Path $Stage "enshrouded_manager") | Out-Null
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "static") -Destination (Join-Path $Stage "enshrouded_manager") -Recurse
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "manager.py") -Destination (Join-Path $Stage "enshrouded_manager")
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot "update_runtime.py") -Destination (Join-Path $Stage "enshrouded_manager")
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Launch ESM-Z.bat") -Destination (Join-Path $Stage "enshrouded_manager")
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "README.md") -Destination (Join-Path $Stage "enshrouded_manager")
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "build_exe.ps1") -Destination (Join-Path $Stage "enshrouded_manager")

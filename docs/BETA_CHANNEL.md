@@ -69,3 +69,10 @@ confirmed the patched value; the dedicated server reached its online state.
 Disabling EML restored the original index with an identical SHA-256. The
 dashboard configuration editor was also exercised. These checks establish the
 loader lifecycle, not multiplayer correctness of individual third-party mods.
+
+## Remote updates from 0.9.6.2a/b
+
+After this updater has been activated, Download & Install Update also restarts
+ESM-Z and reconnects the browser automatically. It preserves the selected channel;
+beta retains Mods and stable does not acquire it. Installing this updater through
+an older manager still requires one final manual restart. See [Remote Updates](REMOTE_UPDATES.md).
