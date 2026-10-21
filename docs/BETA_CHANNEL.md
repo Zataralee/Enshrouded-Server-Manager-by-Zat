@@ -1,17 +1,24 @@
 # Windows beta channel
 
-Version 0.9.6.1a adds **Manager > Run beta version**. Save the setting, choose
-**Check Now**, then **Download & Install Update** and restart ESM-Z. Installation
-remains manual. The checkbox selects Windows beta releases and excludes the
-separate Linux alpha channel.
+Starting with 0.9.6.3a/b, **Manager > Run beta version** selects the channel
+used by **Check for Updates** immediately. No separate **Save Manager Settings**
+step is required. Check for Updates saves only the channel choice, leaving other
+unsaved Manager fields alone.
 
-Version 0.9.6.1b adds **Server Setup & Config > Mods**. Mod installation is an
-administrator operation because mod packages execute code on the server host.
-Players may still need EML and matching mods on their own computers.
+1. Check **Run beta version** for beta, or uncheck it for stable.
+2. Click **Check for Updates**.
+3. Click **Download, Install & Restart** and confirm.
+4. Keep the progress dialog open. ESM-Z downloads, verifies, installs, restarts,
+   and reconnects the browser automatically. Check the running version in the header.
 
-To return to the paired stable version, disable modding on each managed server
-first, uncheck **Run beta version**, save, check, install, and restart ESM-Z.
-Server worlds and manager data are preserved by manager updates.
+To return from beta to its paired stable version, first disable EML on every
+managed instance. Stable contains no EML integration; beta retains the Mods tab.
+The checkbox selects Windows beta releases and excludes the Linux alpha channel.
+Running game servers and remote login sessions are preserved by manager updates.
+
+Existing 0.9.6.2a/b users can install this fix using their current channel's
+updater; no manual restart is needed. Older managers require the one-time
+activation described in [Remote Updates](REMOTE_UPDATES.md).
 
 ## Upgrading from 0.9.6 or earlier
 

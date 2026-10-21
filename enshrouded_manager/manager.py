@@ -26,9 +26,18 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 
-APP_VERSION = "0.9.6.2b"
+APP_VERSION = "0.9.6.3b"
 UPDATE_RESTART_PROTOCOL = 1
 UPDATE_LOG = [
+    {
+        "version": "0.9.6.3b",
+        "date": "2026-10-21",
+        "changes": [
+            "Check for Updates now uses and saves the beta checkbox directly, without saving unrelated Manager settings.",
+            "Channel switches use the download, install, automatic restart, and browser reconnection flow.",
+            "Prevented stale channel results from enabling installation of the wrong release.",
+        ],
+    },
     {
         "version": "0.9.6.2b",
         "date": "2026-10-21",

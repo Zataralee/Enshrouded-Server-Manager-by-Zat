@@ -2,6 +2,12 @@
 
 ## Current Release
 
+**v0.9.6.3a / v0.9.6.3b** - 2026-10-21
+
+Check for Updates now reads and saves the Run beta version checkbox directly; no separate Save Manager Settings step is required. Install uses the existing download, verification, automatic restart, and browser reconnection flow. Switching the checkbox invalidates old channel results. Unrelated unsaved Manager settings are not applied. Stable excludes EML; beta retains it.
+
+### Previous stable
+
 **v0.9.6.2a** - 2026-10-21
 
 - Added staged, administrator-approved updates with automatic manager restart and browser reconnection.
