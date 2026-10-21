@@ -19,6 +19,8 @@ def main():
     parser.add_argument('--fixture-dir', required=True, type=Path)
     parser.add_argument('--regression-package', type=Path,
                         help='Optional original alpha.1 ZIP to reproduce the reported invalid native load')
+    parser.add_argument('--single-hop-package', type=Path,
+                        help='Optional alpha.2 ZIP to check the deferred-history single-hop regression')
     args = parser.parse_args()
     work = args.fixture_dir.resolve()
     assert (work/'SHOCK_MOD_TEST_FIXTURE').read_text().strip() == 'disposable-shock-mod-test'
@@ -64,6 +66,15 @@ def main():
                 else:
                     raise AssertionError('Regression did not catch the alpha.1 unsupported ItemId load')
             record('original alpha.1 and reported settings reproduce invalid native ItemId load for every ammo ID')
+            mod.restore(); mod.change_mod(mid, 'remove')
+        if args.single_hop_package:
+            mod.import_zip(args.single_hop_package.read_bytes()); mod.change_mod(mid, 'enable')
+            mod.config_file(mid, 'src/config.lua', reported); mod.apply()
+            old_resource, assembly = export('chain-alpha2-single-hop')
+            old = Program(old_resource, assembly)
+            assert len(old.scenario(ammo=2369196415, deferred=True).hits) == 1
+            assert len(old.scenario(ammo=2369196415, deferred=False).hits) == 3
+            record('alpha.2 reproduces one secondary hit under deferred history but passes the old immediate-history model')
             mod.restore(); mod.change_mod(mid, 'remove')
         mod.import_zip((ROOT/f'dist/mods/Zat-Shock-Tuning-v{version}.zip').read_bytes())
         mod.change_mod(mid, 'enable')

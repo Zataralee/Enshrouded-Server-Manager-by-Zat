@@ -1,4 +1,21 @@
-Zat Shock Tuning 0.2.0-alpha.2 - SERVER TEST PROTOTYPE
+Zat Shock Tuning 0.2.0-alpha.3 - DIAGNOSTIC SERVER TEST
+
+ALPHA.3 SINGLE-HOP DIAGNOSTIC
+Alpha.2 was reported to restore direct damage, but stop after one secondary hit.
+The native ApplyDamage function queues work; alpha.2 checked hit history before
+allowing an engine update. Alpha.3 yields once before that check. The original
+damage path and ammunition alias are unchanged. This is a targeted diagnostic,
+not the requested branching implementation. Nearest-first selection, fan-out,
+and new spell propagation controls are NOT included.
+
+A game update between hits is modeled in the regression harness. The alpha.2
+package reproduces the single-hop result in that model. The real server update
+order still requires a combat retest. If it still stops, do not remove the
+history guard: it prevents re-hitting targets when history is unavailable.
+
+The original arrow has a finite lifetime. max_jumps = 0 removes the configured
+count limit; this diagnostic cannot promise a map-spanning or indefinitely
+living chain. A separate propagation lifecycle is still under investigation.
 
 ALPHA.1 DAMAGE REGRESSION FIX
 Do not use alpha.1 with chains enabled. Its ammunition check loaded an ItemId
@@ -38,7 +55,8 @@ WHAT WORKS IN THIS PROTOTYPE
   Its staff/wand critical-hit requirement and skill requirement remain intact.
 
 NOT INCLUDED YET
-New circular shock AOE on hit; circular AOE activation probability;
+Branching/fan-out; nearest-target ordering; new spell propagation controls;
+new circular shock AOE on hit; circular AOE activation probability;
 per-jump damage falloff; global shock/debuff changes; stun strength changes;
 new wands, melee effects, skills, items, or visual assets.
 
@@ -56,8 +74,8 @@ damage. Chain damage uses the arrow's existing combat context, with its own
 raw attack coefficient and no secondary critical roll or extra mana cost.
 Final health loss still depends on the game and the victim's defenses.
 
-This alpha resolves secondary hits rapidly during the original hit execution.
-It does not reproduce the spell's timed hop cadence. It reuses the native
+This diagnostic yields after each secondary damage request before checking
+history. It does not reproduce the spell's timed hop cadence. It reuses the native
 lightning-link visual, with no new asset IDs. It does not enlarge the flying
 arrow's collider. Ground hits, blocked hits and unrelated ammunition retain
 their original paths. The chain uses enemy checks and the game's hit history;
@@ -72,8 +90,9 @@ No live combat was exercised by automated checks. If chaining does not occur,
 record whether direct damage changed and whether either player saw a link;
 do not assume an invisible effect means no server damage, or vice versa.
 
-There is no hidden jump/range/damage cap. Very large ranges with unlimited jumps
-can produce substantial synchronous query work. No crash-free upper bound is
+There is no added balance cap on jump/range/damage settings. The original
+projectile lifetime and native storage still apply. Very large ranges can
+produce substantial query work. No crash-free upper bound is
 known; the validator checks storage and semantics, not live server performance.
 
 INSTALL THROUGH ESM-Z

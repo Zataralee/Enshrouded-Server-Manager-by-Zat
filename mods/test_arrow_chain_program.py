@@ -82,9 +82,9 @@ class Program:
         return maximum
 
     def scenario(self, ammo=3133483038, blocked=False, kill_initial=False,
-                 history=True, rng=0, positions=None, overrides=None):
+                 history=True, rng=0, positions=None, overrides=None, deferred=True):
         vm = VM(self, ammo, positions or {10: 0, 11: 6, 12: 12, 13: 18, 99: 3},
-                history, rng)
+                history, rng, deferred)
         for key, value in (overrides or {}).items():
             vm.set('ZatArrowChain::' + key, value)
         vm.run(self.code[89], {94})  # Actual pre-hit trampoline.
@@ -100,7 +100,7 @@ class Program:
 
 
 class VM:
-    def __init__(self, program, ammo, positions, history, rng):
+    def __init__(self, program, ammo, positions, history, rng, deferred=True):
         self.program = program
         self.mem = {}
         for i, e in enumerate(program.layout):
@@ -114,6 +114,9 @@ class VM:
             self.mem[i] = value
         self.positions = dict(positions)
         self.history, self.rng = history, rng
+        self.deferred = deferred
+        self.pending_hits = set()
+        self.resumes = 0
         self.stack, self.hits, self.visuals = [], [], []
         self.visited, self.queries = set(), {}
         self.block_targets = set()
@@ -166,6 +169,14 @@ class VM:
                 self.write(c[pc], self.stack.pop()); pc += 1
             elif op == 27:
                 self.stack.pop()
+            elif op == 28:
+                # Native ApplyDamage enqueues a work item. Model the damage
+                # processor updating history between VM executions. This is
+                # still a model: real update order must be checked in combat.
+                self.resumes += 1
+                if self.history:
+                    self.visited.update(self.pending_hits)
+                self.pending_hits.clear()
             elif op == 19:
                 call_id, function = c[pc:pc+2]; pc += 2
                 self.native(call_id, function)
@@ -228,8 +239,10 @@ class VM:
             assert target != 99 and target not in self.visited
             self.write(refs['wasBlocked'], int(target in self.block_targets))
             self.hits.append((target, args['attackMod']))
-            if self.history:
+            if self.history and not self.deferred:
                 self.visited.add(target)
+            elif self.history:
+                self.pending_hits.add(target)
         else:
             raise AssertionError('Unmocked native function ' + name)
         self.stack.append(int(result))
@@ -250,6 +263,9 @@ def check(resource, disassembly):
         assert [t for t, _ in v.hits] == [11, 12, 13]
         assert v.visuals == [(0, 11), (6, 12), (12, 13)]
     record('each tier propagates beyond the initial radius and excludes initial target/allies')
+    assert p.scenario().resumes == 3
+    assert len(p.scenario(deferred=False).hits) == 3
+    record('deferred hit history is consumed after yielding; immediate-history model remains compatible')
     assert len(p.scenario(kill_initial=True).hits) == 3
     record('recorded origin and enemy eligibility survive an initial killing hit')
     assert len(p.scenario(positions={10: 0, 11: 2}).hits) == 1

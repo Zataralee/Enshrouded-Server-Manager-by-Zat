@@ -1,3 +1,45 @@
+Zat Shock Tuning 0.2.0-alpha.3 - diagnostic validation, 2026-10-21
+
+Scope: adds one RVM yield between secondary ApplyDamage and the existing
+hit-history guards. No fan-out, nearest-first selection, new spell propagation,
+or projectile-lifetime change is implemented. No live server/client changed.
+
+Field evidence: user reports alpha.2 restored arrow damage and produced one
+secondary hit. This is user-reported combat evidence, not our automated test.
+
+Read-only native inspection of revision 1273043 dedicated-server executable:
+SHA256 d7baa768eb00aa895d9f5a1cd8747ccf66858c7b542f50983092b2e3261588ee
+- ApplyDamage wrapper RVA 1779f0 allocates/enqueues damage work at 17a107-17a27a.
+- Impact hit-history insertion routine RVA 98e4c0 updates the hash set and count.
+- A separate damage-processing path invokes it at RVA 18bb18.
+- IsConsecutiveHit uses that set; GetConsecutiveHitCount reads its live count.
+Thus a successful ApplyDamage return does not establish that history has
+already advanced. This is a concrete mismatch in the old test model.
+
+The revised harness models damage completion on RVM. It is NOT a native engine
+integration test and cannot prove that one RVM is sufficient in every context.
+The original alpha.2 package must stop after one secondary hit in the deferred
+model, while still passing the old immediate-history model. The new package
+must pass both and keep the no-history fail-closed test.
+
+Current alpha.3 validation: 26 chain checks and 23 scalar checks passed.
+- Original alpha.1 native ItemId-load regression remains detected.
+- Original alpha.2 reproduces one hop with deferred history, three with immediate.
+- Alpha.3 propagates in both modeled schedules and stops safely without history.
+- Complete emitted-program branch/type/stack audit passes (maximum 25 of 256).
+- ESM-Z adapter import/configure/apply/export/reapply/restore checks pass.
+- Existing scalar tuning and exact baseline restoration checks pass.
+- No real client combat or new native server startup was run for alpha.3.
+
+Required combat retest: upload alpha.3 through ESM-Z to the test server; preserve
+the working config, enable one tier, use max_jumps = 2, and hit a group with at
+least three enemies in range. Check actual health loss on the two secondary
+enemies, not only VFX. Also check an unrelated arrow still deals direct damage.
+If the chain still stops after one, retain the history guard and investigate
+native update timing/root identity; no full branching release is claimed.
+
+Historical alpha.2 validation follows (counts below refer to alpha.2):
+
 Zat Shock Tuning 0.2.0-alpha.2 - validation record, 2026-10-21
 
 Alpha.1 field report: enabling one chain tier removed arrow damage. Disabling

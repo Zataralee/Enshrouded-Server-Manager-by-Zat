@@ -1,4 +1,4 @@
--- Zat Shock Tuning 0.2.0-alpha.2. Edit through ESM-Z > Mods > Configure.
+-- Zat Shock Tuning 0.2.0-alpha.3 DIAGNOSTIC. Edit through ESM-Z > Mods > Configure.
 -- Stop the server, save, Apply & Validate Mods, then start the server.
 -- All shipped numbers preserve vanilla gameplay. config.defaults.lua is a backup.
 -- Distances are game units; the exact in-game geometry needs multiplayer testing.
@@ -50,7 +50,9 @@ return {
         -- damage: secondary attack coefficient, independent of the direct hit.
         -- max_jumps: secondary targets; 0 = no user limit. Nonnegative uint32.
         -- Native hit history excludes previous victims. No extra mana per jump.
-        -- Rapid chain, not the spell's timed cadence. Native lightning-link VFX.
+        -- Yields between hits for native hit-history processing. Native link VFX.
+        -- Diagnostic: nearest-target ordering and branching are NOT implemented.
+        -- The original projectile lifetime may still terminate long chains.
         -- No balance caps; range/damage use float32, chance is 0..100 percent.
         eternal_20 = { enabled = false, chance_percent = 100, spread_radius = 7.0, damage = 0.5, max_jumps = 0 },
         eternal_36 = { enabled = false, chance_percent = 100, spread_radius = 7.0, damage = 0.5, max_jumps = 0 },

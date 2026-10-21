@@ -1,9 +1,9 @@
 {
   "id": "zat-shock-tuning",
   "name": "Zat Shock Tuning - Server Test",
-  "version": "0.2.0-alpha.2",
+  "version": "0.2.0-alpha.3",
   "capabilities": ["patch"],
-  "description": "Experimental on-hit chains for eternal lightning arrows, existing chain spell tuning, all eternal arrows' direct damage and Mass Destruction. Chains default off. Multiplayer combat verification pending.",
+  "description": "Diagnostic build: defer arrow-chain hit-history checks until an engine update. Existing scalar tuning retained. No branching or nearest-target ordering yet. Multiplayer retest required.",
   "authors": ["Zataralee"],
   "license": "MIT"
 }

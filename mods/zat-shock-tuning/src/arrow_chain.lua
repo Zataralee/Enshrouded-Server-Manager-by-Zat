@@ -189,6 +189,10 @@ function M.plan(settings, api)
             "ForEach::normal","position","candidate","GetRoot::entityId","ApplyDamage::wasBlocked"})
         branch(10,"finish")
         load("ApplyDamage::wasBlocked");branch(9,"finish")
+        -- ApplyDamage queues damage; its successful return is not completion.
+        -- Yield so the engine can process that work before checking hit history.
+        -- An immediate check stops after one secondary hit on the live server.
+        emit(28) -- RVM: resume on a later engine update.
         -- Fail closed if the native history does not record this secondary hit.
         call("IsConsecutiveHit",{"candidate"});branch(10,"finish")
         donecall("GetConsecutiveHitCount",{"hits_after"})
@@ -198,7 +202,7 @@ function M.plan(settings, api)
             load("jumps");load(prefix.."limit");emit(5);branch(10,"finish")
         end
         -- Same-impact native history is retained. No ClearConsecutiveHits is issued.
-        -- Resolve the chain in this hit execution; VFX has its own native lifetime.
+        -- Keep history across updates; VFX has its own native lifetime.
         branch(8,prefix.."query")
         mark(prefix.."close");donecall("DestroyFactionQuery",query_args,qid);branch(8,"finish")
         -- Match the native query's shutdown signature and call ID.
