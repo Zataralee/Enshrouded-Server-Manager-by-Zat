@@ -509,3 +509,16 @@ pre {
   main > section, header, nav, .sub-nav, .manager-update-banner { padding-left: 14px; padding-right: 14px; }
   dl, .update-facts { grid-template-columns: 1fr; }
 }
+dialog#managerUpdateProgress {
+  width: min(460px, calc(100% - 32px));
+  box-sizing: border-box;
+  padding: 24px;
+  border: 1px solid #68715e;
+  border-radius: 8px;
+  background: #20241f;
+  color: #f3f3ee;
+  overflow-wrap: anywhere;
+}
+dialog#managerUpdateProgress::backdrop { background: #000a; }
+#managerUpdateProgress h2 { margin-top: 0; font-size: 20px; }
+#managerUpdateProgress progress { width: 100%; accent-color: #d8b952; }

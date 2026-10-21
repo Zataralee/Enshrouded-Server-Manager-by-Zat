@@ -35,7 +35,7 @@ function fixture(selected) {
     'renderUsers', 'renderInvites', 'renderInstructions', 'renderUpdateLog', 'renderDiscoveredSaves']) {
     context[name] = () => {};
   }
-  vm.runInContext(`let state = {}; let serverConfig = {}; let activeInstanceId = 'removed-server';
+  vm.runInContext(`let state = {}; let serverConfig = {}; let activeInstanceId = 'removed-server'; let managerUpdatePoll = false;
     function selectedInstance() { return state.selected_instance || {}; }
     function selectedInstanceId() { return activeInstanceId || selectedInstance().id; }
     ${extract('async function renderBackups()', 'function renderDiscoveredSaves()')}

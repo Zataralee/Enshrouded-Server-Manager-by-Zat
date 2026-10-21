@@ -21,3 +21,10 @@ the package over it while preserving `enshrouded_manager/data`, and restart.
 The corrected updater then distinguishes 0.9.6.1a from 0.9.6.1b.
 
 The stable package has no EML integration or third-party EML binary.
+
+## Remote updates from 0.9.6.2a/b
+
+After this updater has been activated, Download & Install Update also restarts
+ESM-Z and reconnects the browser automatically. It preserves the selected channel;
+beta retains Mods and stable does not acquire it. Installing this updater through
+an older manager still requires one final manual restart. See [Remote Updates](REMOTE_UPDATES.md).

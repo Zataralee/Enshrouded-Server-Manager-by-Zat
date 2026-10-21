@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ESM-Z</title>
-    <link rel="stylesheet" href="/styles.css?v=20261019-install-bootstrap">
+    <link rel="stylesheet" href="/styles.css?v=20261021-remote-update">
 </head>
 <body>
   <div id="login" class="login hidden">
@@ -425,6 +425,13 @@
 
     <div id="toast"></div>
   </main>
-  <script src="/app.js?v=20261019-install-bootstrap"></script>
+  <dialog id="managerUpdateProgress" aria-labelledby="updateProgressTitle">
+    <h2 id="updateProgressTitle">Updating ESM-Z</h2>
+    <p id="updateProgressMessage" role="status" aria-live="polite">Preparing update.</p>
+    <progress id="updateProgressActivity" aria-label="Manager update progress"></progress>
+    <p id="updateProgressError" class="error"></p>
+    <button id="closeUpdateProgress" type="button" hidden>Close</button>
+  </dialog>
+  <script src="/app.js?v=20261021-remote-update"></script>
 </body>
 </html>

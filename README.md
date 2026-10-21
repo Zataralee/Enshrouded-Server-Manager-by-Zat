@@ -4,11 +4,11 @@
 
 The stable release supports Windows hosts. Experimental Linux support is available separately through the `v0.10.0-linux-alpha.7` prerelease and is not production-ready.
 
-Current release: **v0.9.6.1a**
+Current release: **v0.9.6.2a**
 
 Experimental Linux prerelease: **v0.10.0-linux-alpha.7**
 
-Shareable package: [`release/ESM-Z-PythonRequired-v0.9.6.1a.zip`](release/ESM-Z-PythonRequired-v0.9.6.1a.zip)
+Shareable package: [`release/ESM-Z-PythonRequired-v0.9.6.2a.zip`](release/ESM-Z-PythonRequired-v0.9.6.2a.zip)
 
 ![ESM-Z dashboard](docs/screenshots/dashboard.png)
 
@@ -33,7 +33,7 @@ Shareable package: [`release/ESM-Z-PythonRequired-v0.9.6.1a.zip`](release/ESM-Z-
 
 Use the Python-required release if Python 3.11 or newer is already installed on the server.
 
-1. Download [`release/ESM-Z-PythonRequired-v0.9.6.1a.zip`](release/ESM-Z-PythonRequired-v0.9.6.1a.zip).
+1. Download [`release/ESM-Z-PythonRequired-v0.9.6.2a.zip`](release/ESM-Z-PythonRequired-v0.9.6.2a.zip).
 2. Extract it to the machine that will host the manager.
 3. Run `Run ESM-Z.bat`.
 4. Open `http://127.0.0.1:8080` on that machine.

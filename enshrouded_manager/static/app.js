@@ -17,6 +17,8 @@ let editingWebhookId = "";
 let webhookInstanceId = "";
 let installPoll = null;
 let autoRefreshPoll = null;
+let managerUpdatePoll = false;
+const activeUpdatePhases = ["waiting", "downloading", "verifying", "preparing", "restarting", "rolling_back"];
 let activeInstanceId = localStorage.getItem("esm_active_instance_id") || "";
 let discoveredSaves = [];
 let uploadedSaveFiles = [];
@@ -651,6 +653,9 @@ function renderCurrentWebhooks() {
 
 function renderManagerUpdateStatus() {
   const updates = (state.manager || {}).manager_updates || {};
+  if (activeUpdatePhases.includes(updates.operation?.phase) && !managerUpdatePoll) {
+    reconnectManagerUpdate(updates.operation);
+  }
   const title = document.querySelector("#managerUpdateStatus");
   const detail = document.querySelector("#managerUpdateDetail");
   const installed = document.querySelector("#managerInstalledVersion");
@@ -718,6 +723,68 @@ function renderManagerUpdateStatus() {
   }
   title.textContent = "ESM-Z updates have not been checked yet";
   detail.textContent = "Use Check Now or wait for the scheduled interval.";
+}
+
+async function reconnectManagerUpdate(operation) {
+  if (managerUpdatePoll) return;
+  managerUpdatePoll = true;
+  sessionStorage.setItem("esm_manager_update", JSON.stringify(operation));
+  clearInterval(autoRefreshPoll);
+  autoRefreshPoll = null;
+  clearInterval(installPoll);
+  const dialog = document.querySelector("#managerUpdateProgress");
+  const message = document.querySelector("#updateProgressMessage");
+  const error = document.querySelector("#updateProgressError");
+  const activity = document.querySelector("#updateProgressActivity");
+  const close = document.querySelector("#closeUpdateProgress");
+  close.hidden = true;
+  error.textContent = "";
+  activity.hidden = false;
+  message.textContent = operation.message || "Reconnecting to ESM-Z.";
+  if (!dialog.open) dialog.showModal();
+  const deadline = Date.now() + 30 * 60 * 1000;
+  try {
+    while (Date.now() < deadline) {
+      try {
+        const response = await fetch("/api/manager/update-status", { cache: "no-store", signal: AbortSignal.timeout(4000) });
+        if (response.status === 401 || response.status === 403) {
+          sessionStorage.removeItem("esm_manager_update");
+          location.reload();
+          return;
+        }
+        if (response.ok) {
+          const data = await response.json();
+          const progress = data.operation || {};
+          if (progress.operation_id === operation.operation_id) {
+            message.textContent = progress.message;
+            if ((progress.phase === "rolled_back" || (progress.phase === "complete" && data.version === progress.target_version))
+                && data.boot_id !== operation.previous_boot_id) {
+              sessionStorage.removeItem("esm_manager_update");
+              sessionStorage.setItem("esm_update_result", progress.message);
+              location.reload();
+              return;
+            }
+            if (progress.phase === "error") throw new Error(progress.message);
+          }
+        }
+      } catch (failure) {
+        if (!(failure instanceof TypeError) && !["TimeoutError", "AbortError"].includes(failure.name)) throw failure;
+        message.textContent = "Reconnecting to ESM-Z. Running game servers remain online.";
+      }
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    throw new Error("ESM-Z has not reconnected. Check the host or reload this page to check again.");
+  } catch (failure) {
+    error.textContent = failure.message;
+    activity.hidden = true;
+    close.hidden = false;
+    close.onclick = () => {
+      sessionStorage.removeItem("esm_manager_update");
+      dialog.close();
+      managerUpdatePoll = false;
+      startAutoRefresh();
+    };
+  }
 }
 
 function renderUsers() {
@@ -935,6 +1002,7 @@ function renderUpdateLog() {
 }
 
 async function refresh() {
+  if (managerUpdatePoll) return;
   const suffix = activeInstanceId ? `?instance_id=${encodeURIComponent(activeInstanceId)}` : "";
   const data = await api(`/api/status${suffix}`);
   state = data;
@@ -1376,11 +1444,10 @@ document.addEventListener("click", async event => {
       return;
     }
     if (action === "installManagerUpdate") {
-      if (!confirm("Download and install the available ESM-Z update? Manager files will be backed up first. Running game servers will not be stopped.")) return;
+      if (managerUpdatePoll) return;
+      if (!confirm("Download, install, and restart ESM-Z? This page will reconnect automatically. Running game servers will not be stopped.")) return;
       const result = await api("/api/manager/install-update", { method: "POST" });
-      state.manager.manager_updates = result.manager_updates;
-      renderManagerUpdateStatus();
-      toast("Update installed. Restart ESM-Z to finish.");
+      reconnectManagerUpdate(result.operation);
       return;
     }
     if (action === "discoverSaves") {
@@ -1867,15 +1934,29 @@ function prefillInviteFromUrl() {
 }
 
 async function boot() {
+  const pending = sessionStorage.getItem("esm_manager_update");
+  if (pending) {
+    try { reconnectManagerUpdate(JSON.parse(pending)); return; }
+    catch { sessionStorage.removeItem("esm_manager_update"); }
+  }
   prefillInviteFromUrl();
   const auth = await api("/api/auth/state").catch(() => ({ authenticated: false }));
   if (auth.authenticated) {
     app.classList.remove("hidden");
     await refresh();
     startAutoRefresh();
+    const result = sessionStorage.getItem("esm_update_result");
+    if (result) {
+      sessionStorage.removeItem("esm_update_result");
+      toast(result);
+    }
   } else {
     login.classList.remove("hidden");
   }
 }
+
+document.querySelector("#managerUpdateProgress").addEventListener("cancel", event => {
+  if (document.querySelector("#closeUpdateProgress").hidden) event.preventDefault();
+});
 
 boot();

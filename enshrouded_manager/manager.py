@@ -26,8 +26,18 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 
-APP_VERSION = "0.9.6.1a"
+APP_VERSION = "0.9.6.2a"
+UPDATE_RESTART_PROTOCOL = 1
 UPDATE_LOG = [
+    {
+        "version": "0.9.6.2a",
+        "date": "2026-10-21",
+        "changes": [
+            "Added remote one-click manager updates with automatic restart, browser reconnection, and startup-health rollback.",
+            "Preserved remote login sessions across manager restarts and invalidated sessions after password changes or logout.",
+            "Staged updates outside live code and waited for active server operations; game server processes remain online.",
+        ],
+    },
     {
         "version": "0.9.6.1a",
         "date": "2026-10-20",
@@ -237,6 +247,8 @@ else:
 SERVER_DIR = ROOT / "Enshrouded Dedicated Server"
 STEAMCMD = ROOT / "Steamcmd" / "steamcmd.exe"
 APP_DIR = ROOT / "enshrouded_manager"
+sys.path.insert(0, str(APP_DIR))
+import update_runtime
 DATA_DIR = APP_DIR / "data"
 MANAGER_CONFIG = DATA_DIR / "manager_config.json"
 SERVER_CONFIG = SERVER_DIR / "enshrouded_server.json"
@@ -887,11 +899,137 @@ class ServerSupervisor:
 
 
 SUPERVISORS = {}
-SESSIONS = {}
 CONFIG_LOCK = threading.RLock()
 STEAMCMD_LOCK = threading.Lock()
 JOBS = {}
 JOBS_LOCK = threading.RLock()
+SESSION_LOCK = threading.RLock()
+UPDATE_LOCK = threading.Lock()
+MAINTENANCE = threading.Event()
+OPERATIONS = threading.Condition()
+ACTIVE_OPERATIONS = 0
+HTTP_SERVER = None
+BOOT_ID = secrets.token_hex(16)
+
+
+def session_user(token):
+    key = hashlib.sha256(token.encode()).hexdigest()
+    with SESSION_LOCK:
+        records = update_runtime.read_json(DATA_DIR / "sessions.json")
+        session = records.get(key, {})
+        user = find_user(user_id=session.get("user_id")) if session else None
+        if (not user or session.get("expires", 0) <= time.time()
+                or session.get("credential") != hashlib.sha256(user.get("password_hash", "").encode()).hexdigest()):
+            return None
+        return user
+
+
+def create_session(user):
+    token = secrets.token_urlsafe(32)
+    with SESSION_LOCK:
+        path = DATA_DIR / "sessions.json"
+        records = {key: value for key, value in update_runtime.read_json(path).items()
+                   if value.get("expires", 0) > time.time()}
+        records[hashlib.sha256(token.encode()).hexdigest()] = {
+            "user_id": user["id"], "expires": time.time() + 86400,
+            "credential": hashlib.sha256(find_user(user_id=user["id"])["password_hash"].encode()).hexdigest(),
+        }
+        update_runtime.atomic_json(path, records)
+    return token
+
+
+def revoke_session(token):
+    with SESSION_LOCK:
+        path = DATA_DIR / "sessions.json"
+        records = update_runtime.read_json(path)
+        records.pop(hashlib.sha256(token.encode()).hexdigest(), None)
+        update_runtime.atomic_json(path, records)
+
+
+def manager_update_status():
+    return update_runtime.read_json(DATA_DIR / "manager_updates" / "status.json", {"phase": "idle"})
+
+
+def update_status(phase, message, **values):
+    return update_runtime.set_status(DATA_DIR / "manager_updates" / "status.json", phase, message, **values)
+
+
+def wait_for_update_idle(timeout=600):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        with OPERATIONS:
+            requests_busy = ACTIVE_OPERATIONS > 0
+        with JOBS_LOCK:
+            jobs_busy = any(job.get("status") == "running" for job in JOBS.values())
+        if not requests_busy and not jobs_busy and not STEAMCMD_LOCK.locked():
+            return
+        time.sleep(0.25)
+    raise RuntimeError("An active server operation did not finish within 10 minutes. Retry the manager update later.")
+
+
+def start_manager_update():
+    if getattr(sys, "frozen", False):
+        raise RuntimeError("Remote restart requires the Python-required release, not an executable build")
+    if HTTP_SERVER is None:
+        raise RuntimeError("The manager HTTP server is not ready")
+    cfg = config()
+    if (HTTP_SERVER.server_address[0] != cfg.get("bind_host", "127.0.0.1")
+            or HTTP_SERVER.server_address[1] != int(cfg.get("port", 8080))):
+        raise RuntimeError("Restart ESM-Z to apply pending listen-address or port changes before updating")
+    if not UPDATE_LOCK.acquire(blocking=False):
+        raise RuntimeError("A manager update is already in progress")
+    MAINTENANCE.set()
+    try:
+        state = update_status("waiting", "Waiting for active server operations to finish.",
+                              operation_id=secrets.token_hex(16), previous_boot_id=BOOT_ID,
+                              target_version="", error="")
+    except Exception:
+        MAINTENANCE.clear()
+        UPDATE_LOCK.release()
+        raise
+
+    def worker():
+        handed_off = False
+        try:
+            wait_for_update_idle()
+            plan = install_manager_update()
+            job = Path(plan["job"])
+            helper = job / "update-helper.py"
+            shutil.copy2(Path(update_runtime.__file__), helper)
+            plan_path = job / "plan.json"
+            update_runtime.atomic_json(plan_path, plan)
+            options = {"cwd": str(ROOT), "stdin": subprocess.DEVNULL}
+            if os.name == "nt":
+                options["creationflags"] = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+            else:
+                options["start_new_session"] = True
+            with (job / "helper.log").open("ab") as output:
+                process = subprocess.Popen([sys.executable, "-u", str(helper), str(plan_path)],
+                                           stdout=output, stderr=subprocess.STDOUT, **options)
+            deadline = time.monotonic() + 10
+            while not (job / "helper-ready.json").is_file():
+                if process.poll() is not None or time.monotonic() > deadline:
+                    raise RuntimeError("The independent update helper did not start; the current manager is still running")
+                time.sleep(0.1)
+            update_status("restarting", "Restarting ESM-Z. Running game servers remain online.")
+            handed_off = True
+            HTTP_SERVER.shutdown()
+        except Exception as error:
+            update_status("error", str(error), error=str(error))
+            write_log(f"Manager update failed: {error}")
+            notify_webhook_event("manager.update.failed", message=f"Manager update failed: {error}")
+        finally:
+            if not handed_off:
+                MAINTENANCE.clear()
+            UPDATE_LOCK.release()
+
+    try:
+        threading.Thread(target=worker, daemon=True).start()
+    except Exception:
+        MAINTENANCE.clear()
+        UPDATE_LOCK.release()
+        raise
+    return state
 
 
 def supervisor(instance_id=None):
@@ -1394,6 +1532,8 @@ def public_config(user=None):
     cfg.pop("password_salt", None)
     cfg.pop("initial_password", None)
     cfg["manager_updates"] = public_manager_updates(cfg.get("manager_updates"))
+    if is_admin(user):
+        cfg["manager_updates"]["operation"] = manager_update_status()
     ftp = dict(cfg.get("ftp_backup", {}))
     if ftp.get("password"):
         ftp["password"] = "********"
@@ -2534,27 +2674,6 @@ def packaged_manager_version(manager_dir):
     return match.group(1)
 
 
-def replace_manager_files(source_dir, destination_dir):
-    source_dir = Path(source_dir)
-    destination_dir = Path(destination_dir)
-    destination_dir.mkdir(parents=True, exist_ok=True)
-    for item in destination_dir.iterdir():
-        if item.name == "data":
-            continue
-        if item.is_dir():
-            shutil.rmtree(item)
-        else:
-            item.unlink()
-    for item in source_dir.iterdir():
-        if item.name in {"data", "__pycache__"}:
-            continue
-        destination = destination_dir / item.name
-        if item.is_dir():
-            shutil.copytree(item, destination)
-        else:
-            shutil.copy2(item, destination)
-
-
 def install_manager_update():
     updates = manager_updates_config()
     if updates.get("restart_required"):
@@ -2571,17 +2690,21 @@ def install_manager_update():
     asset = find_release_asset(release)
     if not asset:
         raise RuntimeError("Latest GitHub release does not include a Python-required zip asset")
-    package_dir = DATA_DIR / "manager_updates"
+    update_status("downloading", f"Downloading ESM-Z v{release_version}.", target_version=release_version)
+    package_dir = DATA_DIR / "manager_updates" / secrets.token_hex(16)
     package_dir.mkdir(parents=True, exist_ok=True)
+    if Path(asset["name"]).name != asset["name"] or "\\" in asset["name"]:
+        raise ValueError("Invalid release asset filename")
     package_path = package_dir / asset["name"]
     extract_dir = package_dir / "extract"
     backup_dir = package_dir / f"before-{APP_VERSION}-{dt.datetime.now().strftime('%Y%m%d-%H%M%S')}"
     backup_manager = backup_dir / "enshrouded_manager"
-    replacement_started = False
     try:
         download_github_asset(asset, package_path, token=token)
+        update_status("verifying", "Verifying the downloaded package.")
         checksum_verified = verify_release_checksum(release, asset, package_path, token=token)
-        shutil.rmtree(extract_dir, ignore_errors=True)
+        if not checksum_verified:
+            raise RuntimeError("This release has no SHA-256 checksum; remote installation was not started")
         safe_extract_zip(package_path, extract_dir)
         extracted_manager = extract_dir / "enshrouded_manager"
         if not extracted_manager.exists():
@@ -2589,46 +2712,34 @@ def install_manager_update():
         package_version = packaged_manager_version(extracted_manager)
         if package_version != release_version:
             raise RuntimeError(f"Update package version v{package_version} does not match release v{release_version}")
+        if not (extracted_manager / "update_runtime.py").is_file():
+            raise RuntimeError("This package predates remote restart support; install it manually instead")
+        for source in extracted_manager.glob("*.py"):
+            compile(source.read_text(encoding="utf-8"), str(source), "exec")
+        update_status("preparing", "Backing up manager files before restart.")
         if APP_DIR.exists():
             shutil.copytree(APP_DIR, backup_manager, ignore=shutil.ignore_patterns("data", "__pycache__"))
-        replacement_started = True
-        replace_manager_files(extracted_manager, APP_DIR)
-        with CONFIG_LOCK:
-            cfg = config()
-            updates = cfg.setdefault("manager_updates", default_manager_updates())
-            updates.update({
-                "last_installed_at": now_iso(),
-                "last_error": "",
-                "installed_pending_version": release_version,
-                "restart_required": True,
-                "checksum_verified": checksum_verified,
-                "update_available": False,
-                "release_state": "installed_pending_restart",
-            })
-            save_json(MANAGER_CONFIG, cfg)
-        notify_webhook_event(
-            "manager.update.installed",
-            message=f"Manager update package v{release_version} was installed. Restart the manager to run the new version.",
-            details={"latest_version": release_version, "checksum_verified": checksum_verified},
-        )
-        write_log(f"Manager update package v{release_version} installed; restart the manager to finish the update")
-        return dict(manager_updates_config())
+        cfg = config()
+        host = cfg.get("bind_host", "127.0.0.1")
+        host = {"0.0.0.0": "127.0.0.1", "::": "::1"}.get(host, host)
+        if ":" in host:
+            host = f"[{host}]"
+        return {
+            "job": str(package_dir.resolve()), "app": str(APP_DIR.resolve()), "root": str(ROOT.resolve()),
+            "source": str(extracted_manager.resolve()), "backup": str(backup_manager.resolve()),
+            "status": str((DATA_DIR / "manager_updates" / "status.json").resolve()),
+            "command": [sys.executable, "-u", str((APP_DIR / "manager.py").resolve())],
+            "console_log": str((DATA_DIR / "manager_updates" / "update-console.log").resolve()),
+            "parent_pid": os.getpid(), "target_version": release_version, "previous_version": APP_VERSION,
+            "health_url": f"http://{host}:{int(cfg.get('port', 8080))}/api/health",
+        }
     except Exception as exc:
-        if replacement_started and backup_manager.exists():
-            try:
-                replace_manager_files(backup_manager, APP_DIR)
-                write_log("Manager update failed after replacement began; restored the previous manager files")
-            except Exception as rollback_exc:
-                write_log(f"Manager update rollback also failed: {rollback_exc}")
         with CONFIG_LOCK:
             cfg = config()
             updates = cfg.setdefault("manager_updates", default_manager_updates())
             updates["last_error"] = str(exc)
             save_json(MANAGER_CONFIG, cfg)
-        notify_webhook_event("manager.update.failed", message=f"Manager update failed: {exc}", details={"error": str(exc)})
         raise
-    finally:
-        shutil.rmtree(extract_dir, ignore_errors=True)
 
 
 def webhook_targets(event, instance_id=None):
@@ -3546,7 +3657,8 @@ class Handler(SimpleHTTPRequestHandler):
     server_version = "EnshroudedManager/0.1"
 
     def log_request(self, code="-", size="-"):
-        polling_routes = {"/api/status", "/api/jobs", "/api/log", "/api/backups", "/api/savegame/imports"}
+        polling_routes = {"/api/status", "/api/jobs", "/api/log", "/api/backups", "/api/savegame/imports",
+                          "/api/health", "/api/manager/update-status"}
         if self.command == "GET" and str(code) == "200" and urlparse(self.path).path in polling_routes:
             return
         super().log_request(code, size)
@@ -3574,10 +3686,8 @@ class Handler(SimpleHTTPRequestHandler):
         cookie = self.headers.get("Cookie", "")
         for part in cookie.split(";"):
             name, _, value = part.strip().partition("=")
-            session = SESSIONS.get(value) if name == "esm_session" else None
-            if session and session.get("expires", 0) > time.time():
-                session["expires"] = time.time() + 86400
-                return find_user(user_id=session.get("user_id"))
+            if name == "esm_session":
+                return session_user(value)
         return None
 
     def json_body(self):
@@ -3613,10 +3723,16 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         route = urlparse(self.path)
+        if route.path == "/api/health":
+            return self.send_json({"ready": True, "version": APP_VERSION, "boot_id": BOOT_ID, "pid": os.getpid()})
         if route.path.startswith("/api/"):
             if route.path not in {"/api/auth/state"} and not self.require_auth():
                 return
             try:
+                if route.path == "/api/manager/update-status":
+                    if not self.require_admin():
+                        return
+                    return self.send_json({"operation": manager_update_status(), "version": APP_VERSION, "boot_id": BOOT_ID})
                 if route.path == "/api/auth/state":
                     user = self.current_user()
                     return self.send_json({"authenticated": user is not None, "local": self.is_local(), "config": public_config(user) if user else {}})
@@ -3682,7 +3798,23 @@ class Handler(SimpleHTTPRequestHandler):
         return super().do_GET()
 
     def do_POST(self):
+        global ACTIVE_OPERATIONS
+        with OPERATIONS:
+            if MAINTENANCE.is_set():
+                return self.send_json({"error": "ESM-Z is updating. Wait for it to reconnect before making changes."}, 503)
+            ACTIVE_OPERATIONS += 1
+        try:
+            return self.handle_post()
+        finally:
+            with OPERATIONS:
+                ACTIVE_OPERATIONS -= 1
+                OPERATIONS.notify_all()
+
+    def handle_post(self):
         route = urlparse(self.path).path
+        origin = self.headers.get("Origin")
+        if route == "/api/manager/install-update" and origin and urlparse(origin).netloc != self.headers.get("Host"):
+            return self.send_json({"error": "Cross-origin updates are not permitted"}, 403)
         try:
             if route == "/api/auth/login":
                 body = self.json_body()
@@ -3690,8 +3822,7 @@ class Handler(SimpleHTTPRequestHandler):
                 ok = bool(user and verify_password(body.get("password", ""), user["password_salt"], user["password_hash"]))
                 if not ok:
                     return self.send_json({"error": "Invalid username or password"}, HTTPStatus.UNAUTHORIZED)
-                token = secrets.token_urlsafe(32)
-                SESSIONS[token] = {"user_id": user["id"], "expires": time.time() + 86400}
+                token = create_session(user)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Set-Cookie", f"esm_session={token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400")
@@ -3699,14 +3830,17 @@ class Handler(SimpleHTTPRequestHandler):
                 self.wfile.write(b'{"ok": true}')
                 return
             if route == "/api/auth/logout":
+                for part in self.headers.get("Cookie", "").split(";"):
+                    name, _, value = part.strip().partition("=")
+                    if name == "esm_session":
+                        revoke_session(value)
                 self.send_response(200)
                 self.send_header("Set-Cookie", "esm_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0")
                 self.end_headers()
                 return
             if route == "/api/invites/redeem":
                 user = redeem_invite_code(self.json_body())
-                token = secrets.token_urlsafe(32)
-                SESSIONS[token] = {"user_id": user["id"], "expires": time.time() + 86400}
+                token = create_session(user)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Set-Cookie", f"esm_session={token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400")
@@ -3842,7 +3976,7 @@ class Handler(SimpleHTTPRequestHandler):
             if route == "/api/manager/install-update":
                 if not self.require_admin():
                     return
-                return self.send_json({"ok": True, "manager_updates": public_manager_updates(install_manager_update())})
+                return self.send_json({"ok": True, "operation": start_manager_update()}, 202)
             if route == "/api/webhooks/test":
                 if not self.require_perm("settings"):
                     return
@@ -3946,7 +4080,15 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 def monitor_loop():
+    global ACTIVE_OPERATIONS
     while True:
+        if MAINTENANCE.is_set():
+            time.sleep(0.25)
+            continue
+        with OPERATIONS:
+            if MAINTENANCE.is_set():
+                continue
+            ACTIVE_OPERATIONS += 1
         try:
             check_manager_updates(force=False)
             for inst in instances():
@@ -3955,6 +4097,9 @@ def monitor_loop():
                 scheduled_backup_check(inst["id"])
         except Exception as exc:
             write_log(f"Monitor error: {exc}")
+        finally:
+            with OPERATIONS:
+                ACTIVE_OPERATIONS -= 1
         time.sleep(max(2, int(config().get("restart_check_interval_seconds", 5))))
 
 
@@ -3972,18 +4117,42 @@ def scheduled_restart_check(instance_id):
 
 
 def main():
+    global HTTP_SERVER
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
     cfg = config()
     for inst in cfg.get("instances", []):
-        if inst.get("start_on_manager_launch", False):
+        if inst.get("start_on_manager_launch", False) and not os.environ.get("ESM_UPDATE_RESTART"):
             supervisor(inst["id"]).intentional_stop = False
             update_instance_metadata(inst["id"], desired_running=True)
-    threading.Thread(target=monitor_loop, daemon=True).start()
     host = cfg.get("bind_host", "0.0.0.0")
     port = int(cfg.get("port", 8080))
     write_log(f"ESM-Z UI listening on http://{host}:{port}")
-    ThreadingHTTPServer((host, port), Handler).serve_forever()
+    HTTP_SERVER = ThreadingHTTPServer((host, port), Handler)
+    if os.environ.get("ESM_UPDATE_RESTART"):
+        MAINTENANCE.set()
+
+        def finish_handoff():
+            while manager_update_status().get("phase") in update_runtime.ACTIVE_PHASES:
+                time.sleep(0.25)
+            result = manager_update_status()
+            with CONFIG_LOCK:
+                cfg = config()
+                updates = cfg.setdefault("manager_updates", default_manager_updates())
+                if result.get("phase") == "complete":
+                    updates.update(last_installed_at=now_iso(), last_error="", restart_required=False,
+                                   installed_pending_version="", update_available=False)
+                save_json(MANAGER_CONFIG, cfg)
+            MAINTENANCE.clear()
+            event = "manager.update.installed" if result.get("phase") == "complete" else "manager.update.failed"
+            notify_webhook_event(event, message=result.get("message", "Manager restarted"))
+
+        threading.Thread(target=finish_handoff, daemon=True).start()
+    threading.Thread(target=monitor_loop, daemon=True).start()
+    try:
+        HTTP_SERVER.serve_forever()
+    finally:
+        HTTP_SERVER.server_close()
 
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ def build():
         for name in ("README.md", "USER_README.md"):
             shutil.copy2(app / name, target / name)
         shutil.copytree(app / "static", target / "static")
-        if (app / "vendor").exists():
+        if version.endswith("b") and (app / "vendor").exists():
             shutil.copytree(app / "vendor", target / "vendor")
         shutil.copytree(root / "docs", stage / "docs", ignore=shutil.ignore_patterns("MODDING_VIABILITY_*.md"))
         shutil.copy2(root / "README.md", stage / "PROJECT_README.md")
