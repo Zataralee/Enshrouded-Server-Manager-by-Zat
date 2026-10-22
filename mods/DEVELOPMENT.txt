@@ -1,5 +1,34 @@
 Shock Tuning development
 
+Fire-arrow alpha (0.4.0-alpha.1):
+    python mods/validate_fire_arrows.py --fixture-dir <absolute-fixture-directory>
+
+src/fire_arrows.lua validates per-tier profiles and emits one shared controller
+into arrow_chain.lua's single guarded program plan. It must not independently
+overwrite the shared projectile. Scalar validation completes before patches apply.
+The fire ledger overlays the shock frontier because ammo gates are exclusive;
+immutable balanced-dispatch thresholds live OUTSIDE that mutable arena. Records
+have six exact uint32 fields (24 bytes); scalar ID aliases avoid native struct
+GLoad errors. Both read/write dispatches cost 66*N-14 instruction words. Derive
+capacity from remaining instruction and data storage and retain all visited IDs.
+Do not silently reuse visited slots: zero damage still must prevent revisits.
+At capacity, stop adding records, service every existing burn and then destroy.
+
+Burn ticks retain the original Damage.fire, attack coefficient, source and native
+ranged scaling inputs, while using a fire-only DamageSetup and no crit/push/stagger.
+Use ignoreConsecutiveHits for ticks; never derive propagation from damage history.
+Each record has independent duration, unpaid tick time, spread countdown and clock.
+One frame services the records present at frame start; newly added records wait
+until the next frame, including a zero configured delay. A final partial tick
+accounts for all configured time. Native VFX buffs are visual-only, client-known,
+short-lived leases. No shared damage buff or resource ID is changed/introduced.
+
+Reapplication is explicitly independent per-shot stacking in this alpha. Same-
+shooter refresh would require shared ownership/state beyond this controller.
+The native bow-bonus/attribution and unmodified-client combat matrix is still a
+manual acceptance gate. Model assertions of damage inputs are not proof of the
+engine formula. Isolated startup does not execute these on-hit instructions.
+
 Build from the repository root:
     python mods/build_shock_mod.py
 

@@ -13,7 +13,7 @@ def build():
     destination = ROOT / "dist" / "mods" / f"Zat-Shock-Tuning-v{manifest['version']}.zip"
     destination.parent.mkdir(parents=True, exist_ok=True)
     files = ["mod.json", "src/mod.lua", "src/arrow_chain.lua", "src/spell_chain.lua",
-             "src/impact_builder.lua", "src/chain_propagation.lua", "src/config.lua",
+             "src/impact_builder.lua", "src/chain_propagation.lua", "src/fire_arrows.lua", "src/config.lua",
              "README.txt", "VALIDATION.txt", "LICENSE.txt"]
     with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for name in files:

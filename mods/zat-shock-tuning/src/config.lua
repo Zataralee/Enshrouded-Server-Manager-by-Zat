@@ -1,4 +1,4 @@
--- Zat Shock Tuning 0.3.0-alpha.2. Edit through ESM-Z > Mods > Configure.
+-- Zat Shock Tuning 0.4.0-alpha.1. Edit through ESM-Z > Mods > Configure.
 -- Stop the server, save, Apply & Validate Mods, then start the server.
 -- All shipped numbers preserve vanilla gameplay. config.defaults.lua is a backup.
 -- Distances are game units; the exact in-game geometry needs multiplayer testing.
@@ -37,7 +37,7 @@ return {
     eternal_arrows = {
         -- Other eternal arrows: direct-hit coefficients, vanilla 0.5 for each.
         -- Suggested: 0 to 2 (float32). Each level is independent.
-        -- Preserves each arrow's damage type; this does NOT enable AOE yet.
+        -- Preserves each arrow's damage type; fire ignition is enabled separately in fire_arrows.
         -- Lightning settings remain in lightning_arrows for config compatibility.
         ice_10_damage = 0.5,
         ice_28_damage = 0.5,
@@ -68,11 +68,32 @@ return {
         eternal_36 = { enabled = false, chance_percent = 100, spread_radius = 7.0, damage = 0.5, max_jumps = 0, targets_per_spread = 1, spread_delay_ms = 250 },
         eternal_45 = { enabled = false, chance_percent = 100, spread_radius = 7.0, damage = 0.5, max_jumps = 0, targets_per_spread = 1, spread_delay_ms = 250 },
     },
+    fire_arrows = {
+        -- EXPERIMENTAL: initially disabled. Each tier is independent.
+        -- Normal arrow impact stays intact. Ignition adds NO instant blast.
+        -- initial_radius ignites living hostiles around the first hit.
+        -- Each burning victim spreads to its nearest living, non-Soaked hostiles.
+        -- targets_per_spread = 0 disables later spread, not initial ignition.
+        -- max_jumps counts ALL additional ignitions, including the initial area;
+        -- 0 = no configured budget. Native ledger capacity is logged on Apply.
+        -- Full ledger: stop new ignitions and finish existing burns safely.
+        -- Damage uses the shot's FIRE component and native bow/ranged modifiers.
+        -- strength is damage per second relative to that shot, NOT flat HP.
+        -- Tick timing is normalized, including the last partial tick.
+        -- Tick/delay 0 = next update; duration 0 disables this tier's burn.
+        -- Death, Soaked, expiry or lost shooter end the corresponding burn.
+        -- Each arrow has its OWN burn: repeated arrows stack independently.
+        -- Suggested start: radius 3/5, fan-out 3, delay 350 ms, duration 5000 ms,
+        -- tick 500 ms, strength 0.2. Suggestions only; no balance caps.
+        fire_15 = { enabled = false, chance_percent = 100, initial_radius = 3.0, spread_radius = 5.0, targets_per_spread = 3, spread_delay_ms = 350, max_jumps = 0, burn_duration_ms = 5000, burn_tick_ms = 500, burn_damage_multiplier_per_second = 0.2 },
+        fire_28 = { enabled = false, chance_percent = 100, initial_radius = 3.0, spread_radius = 5.0, targets_per_spread = 3, spread_delay_ms = 350, max_jumps = 0, burn_duration_ms = 5000, burn_tick_ms = 500, burn_damage_multiplier_per_second = 0.2 },
+        fire_45 = { enabled = false, chance_percent = 100, initial_radius = 3.0, spread_radius = 5.0, targets_per_spread = 3, spread_delay_ms = 350, max_jumps = 0, burn_duration_ms = 5000, burn_tick_ms = 500, burn_damage_multiplier_per_second = 0.2 },
+    },
     mass_destruction = {
         -- Existing skill only: retains its staff/wand critical-hit requirement.
         radius = 15,                 -- Suggested: 1 to 30; nonnegative signed 32-bit integer.
         damage_per_intelligence = 2, -- Suggested: 0 to 10; unsigned 32-bit integer, before combat processing.
     },
-    -- This prototype does NOT implement new circular AOE-on-hit,
+    -- No persistent burning ground, ice/bone AOE,
     -- per-jump falloff, global shock debuffs or stun changes. No inactive toggles.
 }

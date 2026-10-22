@@ -388,3 +388,174 @@ component with a five-second flight watchdog; active chains use their own cleanu
 and are no longer deliberately cut off by the flight timer. This requires live
 combat/cleanup testing. Native storage and streaming limits remain; no map-wide
 multiplayer claim. See `mods/zat-shock-tuning/VALIDATION.txt` for evidence and limits.
+
+## Eternal fire-arrow investigation — 2026-10-22
+
+Researched, not implemented or deployed. Scope: eternal fire arrows 15/28/45,
+initial area ignition, subsequent enemy-to-enemy spread, configurable DoT, and
+scaling with the firing bow's Magic Fire Damage and All Fire Damage. No game,
+server, save, installed mod or release package was changed during this research.
+
+Recommendation: a weapon-aware burn controller using native burning visuals and
+the nearest-living-target propagation approach. Do not substitute the entire
+explosive-arrow effect or globally edit an existing shared burning debuff.
+
+### Installed asset findings
+
+Six central resources were re-exported read-only from the installed game on
+October 22 and compared as parsed JSON with the revision-1273043 research export:
+level-45 fire arrow, two relevant perks, buff collection, fixed-damage burn
+program and explosive-arrow explosion template. All six match.
+
+- Eternal fire arrows share Impact `c0a8231a-f87f-467c-ad9d-6d4fe93ecda7` with the
+  shock arrows. Their vanilla raw damage coefficient is 0.5. The shared program
+  has an optional ApplyBuff path, but its default buff is null. Extend one shared
+  assembler plan with ammo gates; do not independently overwrite this program.
+- Explosive projectile `bae6dc9c-1fa1-422f-9dfd-b42e204f6826` spawns template
+  `33c000db-c758-4a33-915d-d11ac9d17f55`. Its explosion program
+  `bddf8631-6be9-462e-b1d1-f35e03cc18ad` includes damage, visual, terrain-template
+  and skill-effect paths. Zero blast damage does not remove these other paths or
+  create a burn. A visual can be reused separately if appropriate.
+- Fireball uses the impact-spawning projectile family and explosion program
+  `80a2448f-945c-45f6-8fce-9b09ed61620c`. It is an impact-spawn reference, not an
+  independently scaling contagious burn ready to enable on arrows.
+- Fire pillar zone `cd3f5468-b90c-4ba7-b834-47c467e12cf4` uses program
+  `62b4d50e-cebd-4e06-902f-b9321fa1bc0d`: area damage followed by debuff application.
+  It references burning buff `2ba4a810-3764-408b-806e-bb5820f6b70d`.
+- Environmental fire template `525ef703-6dfc-40a2-90a4-f6d303e7d2a3` applies buff
+  `8237de3a-58d2-4239-9b95-36d714ce772a`. Both this and the pillar buff map to
+  burn program `51a10f44-8a11-46e4-90a1-ff5abd0b8b9b`: timed ticks, a Soaked check,
+  fire-only CreateDamageSetup, ApplyDamage, and size-specific burn visuals.
+  Pillar variants configure fire values 3/6/9/12 and lifetimes 9/10/11/12 seconds.
+  This explicit FireDamage path lacks the weapon/category scaling inputs needed
+  to establish the requested bow inheritance. Copying it unchanged is insufficient.
+- A second burning program, `11dc1506-843b-4034-8d54-6a17dfc9682a`, accepts a
+  DamageSetup, attack coefficient, weapon-category configuration and tick time,
+  with native burning visuals. ApplyBuff accepts DamageSetup, used-item ID and
+  duration. This is a promising prototype candidate, but these parameters do not
+  prove ownership, per-arrow isolation or bonus inheritance at runtime.
+
+Existing buffs serve world hazards and other spells. New buff/resource IDs may
+introduce client dependencies. Prefer existing client-known visuals with
+server-owned logic, then test with unmodified clients. No server-only guarantee
+follows from asset inspection, successful apply, or startup alone.
+
+### Bow scaling contract
+
+`Perk_Damage_Fire` (`79e0cf57-12ce-403c-93ad-f20d391a75ca`) contributes about 0.1
+to its fire-only damageModifier distribution. Actual bow definitions reference
+it, sometimes more than once. This is a native coefficient, not flat +0.1 HP.
+
+`Perk_DamageMod_Fire_All_Magical_5` and `_10` (`3fefd54b-e8cf-427c-bcb0-9a45cd45a347`
+and `53095b4b-f5c3-48f3-93cd-fb795a65c8c2`) configure about 0.05 and 0.10.
+Their program `d02c0f04-ae3e-471c-87d6-9fd194f37786` adds to melee, magic and
+ranged fire modifiers. The ranged attribute is
+`93751533-ce64-455b-936c-895ee43eae4d`. Use the appropriate category path once,
+not the sum of all three categories.
+
+Burn strength should derive from the shot's fire contribution, including arrow
+and active bow fire contribution, multiplied by the configured burn strength.
+Preserve original shooter/weapon ownership and the native fire-modifier path.
+Do not convert physical/ice/shock/poison components into extra fire implicitly.
+Do not copy the first victim's post-resistance health loss to subsequent victims;
+each victim must apply its own resistance.
+
+Prefer capturing the shot's offensive context so a later bow swap does not alter
+an existing burn. Native snapshot/ownership and arithmetic order still need
+verification. Do not add a manual multiplier on top of an already applied native
+bonus. No final numeric formula or automatic ApplyBuff inheritance is proven.
+
+### Proposed behavior and controls — not released config keys
+
+The hit retains normal direct-arrow damage, then ignites the struck enemy and
+all eligible living hostiles in an initial radius, without an additional blast,
+pushback or terrain operation. Each newly ignited enemy can spread after a delay
+to its nearest unvisited living enemies within its own radius. Fan-out controls
+how many. This spreads through enemies in any direction; it does not force a
+geometric ring when the enemies themselves are unevenly distributed.
+
+Each victim's burn duration starts on ignition and can outlive propagation.
+Burn ticks must not start new chains. Proposed settings, independent per tier:
+
+- `enabled`, `chance_percent`, `initial_radius`.
+- `spread_radius`, `targets_per_spread`, `spread_delay_ms`.
+- `max_jumps`: shared total additional ignitions, including initial-area victims;
+  original struck enemy excluded. Zero removes the configured target budget.
+- `burn_duration_ms`, `burn_tick_ms`.
+- `burn_damage_multiplier_per_second`: strength relative to the shot's fire basis;
+  scale each tick by elapsed seconds so frequency changes do not multiply DPS.
+  Define the partial final tick explicitly.
+- A documented reapplication policy. Recommend refreshing same-shooter burns
+  initially; different shooters need explicit independent attribution.
+
+Keep normal direct-damage keys compatible and ship the addition disabled.
+No arbitrary balance caps. Validate finite native-representable values. A zero
+tick interval needs explicit semantics, not division by zero or a busy loop.
+Native storage, streaming and query limits still apply.
+
+Initially target enemies only. Burning ground, structures, allies and players
+are separate features. Preserve native Soaked extinguishing initially and test
+immunities. Recommend that an extinguished/dead pending spreader stop its branch;
+an initial killing hit can still seed its impact-area ignition. These are design
+recommendations rather than claims about existing behavior.
+
+### Development and acceptance gates
+
+1. Prove single-target fire-only DoT, visual lifetime and source credit. Compare
+   no bow bonus, Magic Fire Damage only, All Fire Damage only, and both. Repeat
+   against different resistances and with a bow swap after the shot.
+2. Test active perk unlock levels, reapplication, two shooters, Soaked, death,
+   despawn and separation of direct-hit damage from burn damage.
+3. Add initial ignition radius with no explosion/terrain side effects.
+4. Add propagation and explicit ignition accounting. The shock queue currently
+   depends on native damage-hit history: replacing ApplyDamage with ApplyBuff
+   alone does not establish that history. DoT repeats must neither suppress
+   required ticks nor create fresh branches. Zero damage must not cause retries
+   forever. Model these cases before asking for another combat test.
+5. Keep active burns alive independently of projectile flight and propagation
+   completion, and clean them up on expiry/death. Check source logout and actual
+   native storage boundaries.
+6. Test unmodified multiplayer clients, normal arrows, other spells and shock,
+   ESM remote configuration, restart and restoration before packaging.
+
+Read-only evidence: `dist/fire-spread-research-20261022`, including decoded
+programs/data, `templates.json`, `bow-fire-perks.json`, `provenance.json` and
+`current-check.json`. Extracted game assets stay local and out of release ZIPs.
+
+## Fire-arrow implementation — 0.4.0-alpha.1, 2026-10-22
+
+Implemented in `mods/zat-shock-tuning/src/fire_arrows.lua`, composed into the
+existing single arrow-program patch. All three fire tiers ship disabled and use
+the proposed settings above. Initial radius and delayed nearest-living-target
+fan-out are distinct from per-victim fire-only DoT. The controller preserves the
+shot's populated fire component, original attack coefficient, source, ranged
+category and native scaling attribute, without manually adding the three All
+Fire modifiers. Actual perk arithmetic and server-only combat remain unverified.
+
+Two explicit departures from the initial recommendation:
+
+- Each arrow stacks independently instead of refreshing earlier same-shooter
+  burns. There is no reliable shared per-shooter burn registry in this asset-only
+  controller; ownership remains local to each shot. The policy is documented.
+- A retained visited-ID ledger guarantees no revisits even at zero damage. It
+  cannot recycle completed entries without losing that guarantee. Native 16-bit
+  data/instruction storage yields 970 victims with all fire tiers alone or 398
+  with all three shock and fire tiers enabled at fan-out 3. Actual capacity is
+  logged. At capacity, new ignition stops and current burns finish. `max_jumps=0`
+  removes the configured budget, not this native bound.
+
+The damage-bearing native burn programs are not installed onto victims. Only
+existing size-specific visual buffs are reused; they have null Impact programs,
+ResetTime semantics and despawnOnDeath. Short 500-ms visual leases refresh while
+the victim burns, then expire after Soaked/logout without deleting another
+effect's shared visual. Damage stops on expiry/death/Soaked/source loss. Initial
+killing hits may still seed the impact area. Existing lightning behavior stays
+unchanged behind its separate ammo gates.
+
+`mods/validate_fire_arrows.py` imports the real ZIP through ESM's EML adapter,
+exports/disassembles emitted assets, audits native operands/stack/branches, and
+executes emitted words with modeled native calls. It covers 30 fire-specific
+checks, including the first/middle/last physical ledger records, finite and
+full-width time values, partial ticks, mixed shock/fire and old-config behavior.
+Tests restore the exact clean game index. Combat validation remains required
+before describing bow bonuses or unmodified-client multiplayer as proven.

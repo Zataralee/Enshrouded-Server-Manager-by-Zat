@@ -83,7 +83,9 @@ def main():
         assert 'Applied 0 patches' in log()
         baseline, _ = export('chain-baseline')
         record('ZIP imports, editable config is default, disabled chains leave zero patches')
-        enabled = defaults.replace('enabled = false, chance_percent', 'enabled = true, chance_percent')
+        enabled = defaults
+        for tier in (20, 36, 45):
+            enabled = enabled.replace(f'eternal_{tier} = {{ enabled = false', f'eternal_{tier} = {{ enabled = true')
         mod.config_file(mid, 'src/config.lua', enabled); mod.apply()
         assert 'Applied 4 patches' in log(), log()
         p, text = export('chain-enabled')

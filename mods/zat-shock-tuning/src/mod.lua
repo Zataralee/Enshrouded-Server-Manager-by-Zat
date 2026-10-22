@@ -103,7 +103,8 @@ if config.arrow_chain == nil then
         config.arrow_chain[tier] = {enabled=false,chance_percent=100,spread_radius=7,damage=0.5,max_jumps=0}
     end
 end
-keys(config, {schema_version=true, chain_lightning=true, lightning_arrows=true, eternal_arrows=true, mass_destruction=true, arrow_chain=true}, "config")
+if config.fire_arrows == nil then config.fire_arrows = require("fire_arrows").defaults() end
+keys(config, {schema_version=true, chain_lightning=true, lightning_arrows=true, eternal_arrows=true, mass_destruction=true, arrow_chain=true, fire_arrows=true}, "config")
 if config.schema_version ~= 1 then fail("Unsupported configuration schema") end
 local revision = tostring(game.version):match("^(%d+)|")
 if revision ~= "1273043" then
@@ -201,7 +202,7 @@ program_scalar(program, 1815063917, "impact_nodes.FloatValueNode::value", 390276
 program_scalar(program, 4130293191, "BaseDamge::value", 848563180, "<I4", 2, aoe.damage_per_intelligence,
     "mass_destruction.damage_per_intelligence")
 local chain_change = require("arrow_chain").plan(config.arrow_chain,
-    {fail=fail,keys=keys,number=number,resource=resource})
+    {fail=fail,keys=keys,number=number,resource=resource}, config.fire_arrows)
 if chain_change then changes[#changes+1]=chain_change end
 local spell_change=require("spell_chain").plan(chain.propagation,chain.spread_radius,cast,
     {fail=fail,keys=keys,number=number,resource=resource})

@@ -1,11 +1,11 @@
 {
   "id": "zat-shock-tuning",
   "name": "Zat Shock Tuning - Server Test",
-  "version": "0.3.0-alpha.2",
+  "version": "0.4.0-alpha.1",
   "capabilities": [
     "patch"
   ],
-  "description": "Nearest-first configurable branching for eternal shock arrows and opt-in player chain-lightning spells. Existing scalar tuning retained. Multiplayer retest required.",
+  "description": "Configurable eternal fire-arrow ignition, spreading burns and fire-only DoT, plus existing shock and spell tuning. Experimental server test; combat validation required.",
   "authors": [
     "Zataralee"
   ],

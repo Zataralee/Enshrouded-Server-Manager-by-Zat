@@ -22,7 +22,7 @@ local defs = {
     {key="eternal_36", guid="5c93fd11-e43e-4f09-9996-ad0bed771c1d", id=2453015274, template="805d84da-8e66-4757-abee-03271ada0155"},
     {key="eternal_45", guid="a3ef08e9-f08d-4f27-a250-e42a46d0f8e4", id=2369196415, template="ee33f908-7e96-449c-b1fe-8596a1e7fe28"},
 }
-function M.plan(settings, api)
+function M.plan(settings, api, fire_settings)
     if settings == nil then return end -- Legacy configs retain disabled chains.
     local fail,keys,number,resource = api.fail,api.keys,api.number,api.resource
     keys(settings,{eternal_20=true,eternal_36=true,eternal_45=true},"arrow_chain")
@@ -46,7 +46,11 @@ function M.plan(settings, api)
             active[#active+1]={def=d,config=s}
         end
     end
-    if #active==0 then return end
+    local fire=require("fire_arrows")
+    local fire_active=fire.validate(fire_settings,api)
+    if #active==0 and #fire_active==0 then return end
+    local all_active={};for _,a in ipairs(active) do all_active[#all_active+1]=a end
+    for _,a in ipairs(fire_active) do all_active[#all_active+1]=a end
     local p=resource("c0a8231a-f87f-467c-ad9d-6d4fe93ecda7","keen::ImpactProgram")
     local layout_signature={}
     for _,e in ipairs(p.dataLayout) do
@@ -71,7 +75,7 @@ function M.plan(settings, api)
     if hash_array(resource(chain,"keen::ImpactProgram").data,"B")~=1813197745 then
         fail("Arrow chain: conflicting or unsupported native chain constants")
     end
-    for _,a in ipairs(active) do a.key=a.def.key;b.uint(a.key.."_id",a.def.id) end
+    for _,a in ipairs(all_active) do a.key=a.def.key;b.uint(a.key.."_id",a.def.id) end
     local flight_config=B.fnv("ZatArrowChain.ManagedFlight")
     b.bool("managed_flight",false,flight_config)
     b.bool("flight_started",false);b.uint("flight_start",0);b.uint("flight_limit",5000)
@@ -80,7 +84,7 @@ function M.plan(settings, api)
     -- with a VM flight watchdog. Propagation owns destruction after a hit.
     -- Removing a shared program's generic timeout would leak missed arrows.
     local lifetimes={}
-    for _,a in ipairs(active) do
+    for _,a in ipairs(all_active) do
         local template=resource(a.def.template,"keen::ecs::TemplateResource")
         local remaining={};local count=0;local impact=false;local config_values
         for _,c in ipairs(template.components) do
@@ -101,7 +105,16 @@ function M.plan(settings, api)
         end
         lifetimes[#lifetimes+1]={template=template,components=remaining,config=config_values}
     end
-    propagation.prepare(b,active,api)
+    fire.prepare(b,fire_active,api)
+    local storage_profiles=active
+    if #fire_active>0 then
+        -- Fire and shock are mutually exclusive for a shot and share one arena.
+        -- Reserve the native maximum even if shock uses a small finite frontier.
+        storage_profiles={};for _,a in ipairs(active) do storage_profiles[#storage_profiles+1]=a end
+        storage_profiles[#storage_profiles+1]={key="fire_storage",config={spread_radius=0,
+            targets_per_spread=2,max_jumps=0,chance_percent=100,spread_delay_ms=0}}
+    end
+    propagation.prepare(b,storage_profiles,api)
     local function gate(a,target)
         b.equal("ammunition_value",a.key.."_id");b.branch(9,target)
     end
@@ -115,13 +128,14 @@ function M.plan(settings, api)
     b.emit(29,30)
     b.mark("flight_return");b.emit(p.code[1],p.code[2],8,2)
     local pre=#b.code
-    for _,a in ipairs(active) do gate(a,"capture") end
+    for _,a in ipairs(all_active) do gate(a,"capture") end
     b.emit(8,94)
     b.mark("capture")
     propagation.capture(b,"ForEach::otherEntity","GetRoot::entityId")
     b.emit(8,94)
     local post=#b.code
     for _,a in ipairs(active) do gate(a,a.key.."_start") end
+    for _,a in ipairs(fire_active) do gate(a,a.key.."_fire_start") end
     b.emit(8,191)
     local context={initial="ForEach::otherEntity",root="GetRoot::entityId",damage_args=function(prefix)
         return {false,"true",false,false,"false","CanBeBlocked::value",false,
@@ -132,9 +146,11 @@ function M.plan(settings, api)
     end}
     for _,a in ipairs(active) do propagation.emit(b,a,context) end
     propagation.finish(b);b.emit(8,191)
+    fire.emit(b,fire_active,api)
     b.finish();b.code[1]=8;b.code[2]=flight;b.code[90]=pre;b.code[212]=post
-    return {label="arrow_chain.nearest_fanout_program",before=0,after=#active,apply=function()
+    return {label="arrow_chain.nearest_fanout_program",before=0,after=#all_active,apply=function()
         print("[Zat Shock Tuning] Arrow frontier native storage: "..b.capacity.." pending spreaders; slots are reused")
+        if b.fire_capacity then print("[Zat Shock Tuning] Fire ignition ledger native storage: "..b.fire_capacity.." unique victims per shot (includes first); full ledgers stop spreading and finish existing burns") end
         b.apply()
         for _,v in ipairs(lifetimes) do
             local values={};for _,entry in ipairs(v.config.simple) do values[#values+1]=entry end
