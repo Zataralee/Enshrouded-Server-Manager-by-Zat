@@ -84,10 +84,13 @@ class Program:
 
     def scenario(self, ammo=3133483038, blocked=False, kill_initial=False,
                  history=True, rng=0, positions=None, overrides=None, deferred=True,
-                 block_targets=(), reject_targets=(), kill_targets=()):
+                 block_targets=(), reject_targets=(), kill_targets=(), **options):
         vm = VM(self, ammo, positions or {10: 0, 11: 6, 12: 12, 13: 18, 99: 3},
                 history, rng, deferred)
         vm.block_targets=set(block_targets);vm.reject_targets=set(reject_targets);vm.kill_targets=set(kill_targets)
+        for key,value in options.items(): setattr(vm,key,value)
+        if self.code[0]==8:
+            vm.run(0,{2});vm.stack.pop() # Original first GetRoot operand restored by trampoline.
         for key, value in (overrides or {}).items():
             vm.set('ZatArrowChain::' + key, value)
         vm.run(self.code[89], {94})  # Actual pre-hit trampoline.
@@ -102,9 +105,10 @@ class Program:
         return vm
 
     def spell_scenario(self, enabled=True, positions=None, overrides=None, history=True,
-                       kill_initial=False):
+                       kill_initial=False, **options):
         vm=VM(self, 0, positions or {10: 0, 11: 6, 12: 12, 13: 18}, history, 0)
         vm.set('ZatSpellChain::enabled', int(enabled))
+        for key,value in options.items(): setattr(vm,key,value)
         for key,value in (overrides or {}).items(): vm.set('ZatSpellChain::'+key,value)
         # The initial spell's original timing leaves one stack value to pop.
         vm.stack.append(250)
@@ -133,6 +137,18 @@ class VM:
         self.block_targets = set()
         self.reject_targets = set()
         self.kill_targets = set()
+        self.dead_targets = set()
+        self.health = {}
+        self.factions = {}
+        self.reorder_queries = False
+        self.missing_history = set()
+        self.history_delay = 1
+        self.pending_age = {}
+        self.moves = {}
+        self.tick_ms = 250
+        self.now = 0
+        self.hit_times = []
+        self.destroyed = False
         self.hit_waves = []
         self.query_origins = []
         self.steps = 0
@@ -143,6 +159,8 @@ class VM:
             self.set('Self1::entityId', 2)
             return
         self.set('Ammunition::value', ammo)
+        if 'ZatArrowChain::managed_flight' in program.names:
+            self.set('ZatArrowChain::managed_flight',int(ammo in (3133483038,2453015274,2369196415)))
         self.set('ForEach::otherEntity', 10)
         self.set('GetRoot::entityId', 1)
         self.set('CanBeBlocked::value', 1)
@@ -209,6 +227,8 @@ class VM:
                 self.stack.append(self.read(c[pc])); pc += 1
             elif op == 24:
                 self.write(c[pc], self.stack.pop()); pc += 1
+            elif op == 25:
+                self.stack.append(self.now & 0xffffffff)
             elif op == 27:
                 self.stack.pop()
             elif op == 28:
@@ -216,14 +236,20 @@ class VM:
                 # processor updating history between VM executions. This is
                 # still a model: real update order must be checked in combat.
                 self.resumes += 1
+                self.now += self.tick_ms
                 if self.history:
-                    self.visited.update(self.pending_hits)
-                self.pending_hits.clear()
-                for target in self.kill_targets: self.positions.pop(target, None)
+                    for target in list(self.pending_hits):
+                        self.pending_age[target]=self.pending_age.get(target,0)+1
+                        if self.pending_age[target] >= self.history_delay:
+                            if target not in self.missing_history: self.visited.add(target)
+                            self.pending_hits.remove(target)
+                else: self.pending_hits.clear()
+                for target in self.kill_targets.intersection(t for t,_ in self.hits): self.positions.pop(target, None)
+                self.positions.update(self.moves.get(self.resumes,{}))
             elif op == 30:
                 return
             elif op == 29:
-                pass
+                self.destroyed = True
             elif op == 19:
                 call_id, function = c[pc:pc+2]; pc += 2
                 self.native(call_id, function)
@@ -256,7 +282,10 @@ class VM:
             if call_id not in self.queries:
                 origin, radius = args['transformInput'], args['range']
                 self.query_origins.append(origin)
-                self.queries[call_id] = [e for e, p in self.positions.items() if math.dist(p, origin) <= radius]
+                items = [e for e, p in self.positions.items() if math.dist(p, origin) <= radius
+                         and args['faction'] & (1 << self.factions.get(e,2))]
+                if self.reorder_queries and len(self.query_origins)%2: items.reverse()
+                self.queries[call_id] = items
             items = self.queries[call_id]
             index = args['index']
             result = index < len(items)
@@ -264,6 +293,8 @@ class VM:
                 self.write(refs['entityId'], items[index])
                 if 'transform' in refs: self.write(refs['transform'], self.positions[items[index]])
                 self.write(refs['index'], index+1)
+            else:
+                self.queries.pop(call_id,None) # Native iterator destroys exhausted queries.
         elif name == 'FromTransform':
             self.write(refs['position'], args['transform'])  # Does NOT subtract referenceTransform.
         elif name == 'ApplyOffset':
@@ -281,6 +312,14 @@ class VM:
             self.queries.pop(call_id, None)
         elif name == 'IsValidEntity':
             result = args['entityId'] in self.positions
+        elif name == 'IsInState':
+            assert args['state']==7
+            result = args['entityId'] in self.dead_targets
+        elif name == 'FetchOptionalAttribute':
+            assert args['attributeRef']==bytes.fromhex('d4bd74f7a813624fa33e9630f601b285')
+            hp = self.health.get(args['entityId'],100)
+            result = hp is not None
+            if result: self.write(refs['value'],hp)
         elif name == 'IsSameEntity':
             result = args['entityAId'] == args['entityBId']
         elif name == 'IsConsecutiveHit':
@@ -301,6 +340,7 @@ class VM:
             assert args['ignoreConsecutiveHits'] == 1
             assert args['canCrit'] in (None, 0)
             target = args['targetId']
+            assert target not in self.dead_targets and self.health.get(target,100)>0
             assert target != 99 and target not in self.visited and target not in self.pending_hits
             self.write(refs['wasBlocked'], int(target in self.block_targets))
             if target in self.reject_targets:
@@ -308,6 +348,7 @@ class VM:
                 return
             self.hits.append((target, args['attackMod']))
             self.hit_waves.append((self.resumes, target))
+            self.hit_times.append((self.now,target))
             if self.history and not self.deferred:
                 self.visited.add(target)
             elif self.history:
@@ -332,7 +373,7 @@ def check(resource, disassembly):
         assert [t for t, _ in v.hits] == [11, 12, 13]
         assert v.visuals == [(0, 11), (6, 12), (12, 13)]
     record('each tier propagates beyond the initial radius and excludes initial target/allies')
-    assert p.scenario().resumes == 3
+    assert p.scenario().resumes == 4
     assert len(p.scenario(deferred=False).hits) == 3
     record('deferred hit history is consumed after yielding; immediate-history model remains compatible')
     assert len(p.scenario(kill_initial=True).hits) == 3

@@ -156,3 +156,18 @@ Changing the manager release is not required to conduct the prototypes. A future
 - `dist/shock-research-20261021/templates.json`: selected projectile/effect templates.
 
 `items.json` in the research directory was produced from the October 20 export for comparison; use `client-current/ItemInfo` for current-build values. Inspection scripts in `dist` read local data and invoke only extraction/disassembly commands. No production server, world save, or installed client file was edited.
+
+
+## 0.3.0-alpha.2 testing fixes
+
+The next server-test package filters initial and secondary targets by Dead state
+and positive current HP, queries all factions before caster-hostility filtering,
+and stores selected IDs directly without reopening queries by index. A missing
+hit confirmation skips one branch instead of canceling its siblings.
+`spread_delay_ms` defaults to 250 before the first spread and between generations;
+old configurations inherit that default. Living spreaders refresh position after
+the delay. Enabled shock-arrow templates replace only their server LifeTime
+component with a five-second flight watchdog; active chains use their own cleanup
+and are no longer deliberately cut off by the flight timer. This requires live
+combat/cleanup testing. Native storage and streaming limits remain; no map-wide
+multiplayer claim. See `mods/zat-shock-tuning/VALIDATION.txt` for evidence and limits.

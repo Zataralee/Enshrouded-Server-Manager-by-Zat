@@ -1,4 +1,4 @@
-Zat Shock Tuning 0.3.0-alpha.1 - NEAREST FIRST AND FAN-OUT SERVER TEST
+Zat Shock Tuning 0.3.0-alpha.2 - LIVING TARGETS, CADENCE AND CONTINUED PROPAGATION
 
 This build implements nearest-first branching for eternal lightning arrows
 (levels 20/36/45) and an opt-in replacement for propagation in the five player
@@ -6,18 +6,26 @@ chain-lightning spells. Requires upstream EML 0.2.0 and game revision 1273043.
 Defaults leave the new behavior disabled and preserve vanilla gameplay.
 
 PROPAGATION
-Each spreader chooses the nearest eligible enemies within its own spread_radius,
+Each spreader chooses the nearest living hostile enemies within its own spread_radius,
 using 3D position distance. An equally distant tie uses the entity ID. The query's
 internal enumeration order no longer decides which enemy is struck first.
 There is no additional line-of-sight test; distance and enemy eligibility decide.
+Candidates must exist, not have the Dead state, and have positive current HP.
+Queries include every faction; hostility is tested against the caster, without
+matching the initial victim's faction or species. The chosen ID is stored exactly
+without reopening the query by index. Query order cannot substitute another ID.
 
 targets_per_spread = 1 gives a linear chain. At 3, the initial victim can hit
 three enemies; each of those can hit three more, then those can spread again.
-All parents in a generation submit their hits before an engine update permits
-the next generation. Different branches reserve pending targets immediately and
+spread_delay_ms = 250 waits 0.25 seconds before the first spread and between
+generations. 100 is faster; 500 is slower. Whole milliseconds, 0..4294967295;
+0 still yields one engine update for damage processing. Missing settings use 250.
+All parents in a generation submit their hits before the next generation waits. Different branches reserve pending targets immediately and
 share native completed-hit history, so converging branches do not double-hit.
 The initial victim and allies are excluded. Separate shots/casts have separate
-state. A killing hit can spread from its recorded pre-damage position.
+state. After each delay, surviving spreaders use their current position. A
+killing hit may still spread from its recorded position if the actor disappeared.
+A missing native hit confirmation skips that branch, allowing siblings to proceed.
 
 max_jumps counts TOTAL secondary targets across the whole chain, excluding the
 initial hit. It is not a generation/depth limit or a separate allowance per branch.
@@ -28,13 +36,13 @@ not once for every branch. Direct-hit and secondary damage remain independent.
 CONFIGURE ARROWS
 Under arrow_chain, edit the tier you use. Example:
     eternal_45 = { enabled = true, chance_percent = 100, spread_radius = 7.0,
-                   damage = 0.5, max_jumps = 0, targets_per_spread = 3 },
+                   damage = 0.5, max_jumps = 0, targets_per_spread = 3, spread_delay_ms = 250 },
 Keep your existing radius/damage/chance values if preferred; add the new
 targets_per_spread key to your saved profile. Old profiles missing it use 1.
 
 CONFIGURE SPELLS
 Under chain_lightning, add or edit:
-    propagation = { enabled = true, targets_per_spread = 3, max_jumps = 0 },
+    propagation = { enabled = true, targets_per_spread = 3, max_jumps = 0, spread_delay_ms = 250 },
 The existing chain_lightning.spread_radius controls every spreader's radius.
 The five spells retain their existing targeting, damage, mana and native stamina
 effect settings. Unrelated sequences using the same game program retain their
@@ -49,16 +57,20 @@ probability is 0..100 percent. Numeric validity does not guarantee runtime safet
 This asset-only Impact implementation has finite native storage. Pending
 spreaders use a reusable circular queue within the game's 16-bit data offsets.
 With all three arrow tiers enabled, fan-out 3 and unlimited total targets, this
-build holds 996 pending arrow spreaders; the spell program holds 989. Finite
+build derives capacity from the remaining native storage. Finite
 max_jumps and linear profiles allocate smaller queues. The actual capacity is
 printed in the EML log on Apply. It is NOT a total-victim limit: slots are reused
 and the modeled bytecode traverses a 1,100-target line. An exceptionally wide
 frontier stops if the queue fills, before writing outside native storage.
 
-The original arrow's five-second lifetime remains in effect, so a sufficiently
-long chain may end when the projectile expires. This build does not promise
-map-wide propagation. Only loaded/queryable targets can be selected. If native
-history fails to record a queued victim, propagation stops to avoid repeats.
+For enabled shock arrows only, the server LifeTime component is replaced with
+a five-second flight watchdog in the Impact program. Missed arrows still expire;
+once chaining starts, that flight timeout no longer ends propagation. Completion
+still uses the original destruction path. This lifecycle change needs live combat
+and missed-shot cleanup testing. Only loaded/queryable enemies can be selected.
+With max_jumps = 0 there is no configured depth, total-target or duration limit.
+Native frontier capacity, streaming, entity ownership and shutdown still apply;
+map-wide propagation has not been verified.
 Large radii, crowded queries and branching can create substantial server work.
 
 OTHER SETTINGS RETAINED
@@ -73,8 +85,9 @@ INSTALL OR UPGRADE ENTIRELY THROUGH ESM-Z
 2. Server Setup & Config > Mods: remove the old Zat Shock Tuning mod if installed.
    The manager rejects duplicate IDs; removing it deletes that stored config.
 3. Upload this ZIP intact, enable the mod, then open Configure > src/config.lua.
-4. Restore your tuning and add targets_per_spread to the arrow profiles, and/or
-   the spell propagation block. The old settings remain compatible.
+4. Restore your tuning. Add spread_delay_ms = 250 to your enabled arrow tiers
+   and the spell propagation block (omitting it also defaults to 250). Keep your
+   targets_per_spread, radius, damage and max_jumps values. Old configs work.
 5. Save, Apply & Validate Mods, inspect the EML log, and start the game server.
 No server desktop access, compiler or manual archive editing is needed.
 The mod reads src/config.lua; config.defaults.lua is a backup to copy from.
@@ -84,7 +97,8 @@ Automated tests execute the emitted instructions with modeled native calls,
 including far-first enumeration, elevation, three-then-nine branching, converging
 branches, killed victims, full-width IDs, queue reuse, budgets and failure paths.
 They do not establish live combat timing, damage authority or VFX replication.
-Use a test world and unmodified clients first. Check actual health loss on the
+Use a test world and unmodified clients first. Check mixed species around corpses,
+and verify missed shots disappear while a populated chain continues past 5 s. Check actual health loss on the
 nearest enemies, then on each branch's children beyond the first victim's radius.
 Confirm no repeat hits and that ordinary/disabled arrows still work. Repeat with
 a chain-lightning spell and with two players casting/shooting independently.

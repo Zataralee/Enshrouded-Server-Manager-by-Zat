@@ -8,7 +8,12 @@ function M.prepare(b,profiles,api)
         b.native(name,chain,"ImpactTransform::transform")
     end
     b.native("visual",chain,"Template::value")
-    b.native("factions",chain,"impact_nodes.FilterFaction::faction")
+    -- Query every faction, then test hostility against the caster. The spell's
+    -- original mask omits factions (including FarmAnimal and PlayerAlly).
+    b.add("factions",357126447,string.pack("<I2",65535))
+    b.add("dead_state",1787142139,string.char(7)) -- actor.StateFlag.Dead
+    b.native("health_attribute","642af3d7-f00c-48a5-8d37-6cf25a959ae8","Fetch_HP::attributeRef")
+    b.add("health",2556031774,string.pack("<i4",0))
     for _,name in ipairs({"true","false","eligible","found","last_set","was_blocked","pending_work"}) do b.bool(name,name=="true") end
     for _,name in ipairs({"candidate","best"}) do
         b.add(name,1937543046,string.pack("<I4",0));b.alias(name.."_value",name,848563180)
@@ -18,16 +23,17 @@ function M.prepare(b,profiles,api)
         for i,axis in ipairs({"x","y","z"}) do b.alias(name.."_"..axis,name,3902764048,4,(i-1)*4) end
     end
     for _,name in ipairs({"distance","best_distance","last_distance"}) do b.float(name,0) end
-    for _,name in ipairs({"index","best_index","jumps","children","last_id","head","tail","queued","wave",
-        "scan","scan_left","q_transform","q_entity","capacity"}) do b.uint(name,0) end
+    for _,name in ipairs({"index","jumps","children","last_id","head","tail","queued","wave",
+        "scan","scan_left","q_transform","q_entity","capacity","clock","elapsed","delay_left","active_delay"}) do b.uint(name,0) end
     b.add("less_op",1883392102,string.char(1))
     b.add("sub_op",38291025,string.char(1))
-    b.uint("sign_flip",2147483648);b.uint("queue_stride",2)
+    b.uint("sign_flip",2147483648);b.uint("queue_stride",4)
     local required=0
     for _,profile in ipairs(profiles) do
         local s=profile.config;local k=profile.key.."_"
         b.float(k.."radius",s.spread_radius);b.uint(k.."fanout",s.targets_per_spread)
         b.uint(k.."limit",s.max_jumps);b.float(k.."chance",s.chance_percent/100)
+        b.uint(k.."delay",s.spread_delay_ms)
         if s.damage then b.float(k.."damage",s.damage) end
         if required~=-1 then
             if s.targets_per_spread<=1 then required=math.max(required,1)
@@ -49,8 +55,21 @@ function M.prepare(b,profiles,api)
     for i=0,capacity-1 do
         b.add("frontier_"..i,2492704965,string.rep(string.char(0),56),8)
         b.add("frontier_id_"..i,1937543046,string.pack("<I4",0),4)
+        b.alias("frontier_value_"..i,"frontier_id_"..i,848563180)
+        -- Use the record's existing alignment padding for the dispatch constant.
+        b.add("frontier_index_"..i,848563180,string.pack("<I4",i),4)
     end
     b.capacity=capacity
+end
+function M.capture(b,entity,root)
+    b.zero("eligible")
+    b.call("IsValidEntity",{entity});b.branch(10,"capture_alive_done")
+    b.call("IsInState",{entity,"dead_state"});b.branch(9,"capture_alive_done")
+    b.call("FetchOptionalAttribute",{entity,"health_attribute","health"});b.branch(10,"capture_alive_done")
+    b.emit(12);b.load("health");b.emit(5);b.branch(10,"capture_alive_done")
+    b.call("IsEnemy",{root,entity});b.save("eligible")
+    b.done("GetTransform",{entity,false,"origin"})
+    b.mark("capture_alive_done")
 end
 function M.emit(b,profile,context)
     local p=profile.key.."_";local s=profile.config
@@ -66,10 +85,31 @@ function M.emit(b,profile,context)
     local function advance(index,label)
         b.inc(index);b.equal(index,"capacity");branch(10,label);b.zero(index);mark(label)
     end
+    local function living(entity,reject)
+        b.call("IsValidEntity",{entity});branch(10,reject)
+        b.call("IsInState",{entity,"dead_state"});branch(9,reject)
+        b.call("FetchOptionalAttribute",{entity,"health_attribute","health"});branch(10,reject)
+        b.emit(12);b.load("health");b.emit(5);branch(10,reject)
+    end
+    local function delay(label)
+        b.load(p.."delay");b.save("delay_left");b.emit(25);b.save("clock")
+        mark(label.."_wait");b.emit(28) -- also commit queued damage when delay=0
+        b.emit(25);b.load("clock");b.emit(2);b.save("elapsed")
+        b.uless("elapsed","delay_left");branch(10,label.."_done")
+        b.load("delay_left");b.load("elapsed");b.emit(2);b.save("delay_left")
+        b.emit(25);b.save("clock");branch(8,label.."_wait")
+        mark(label.."_done");b.zero("pending_work")
+    end
     mark("start")
     b.load("eligible");b.branch(10,"finish")
     if s.chance_percent<100 then b.call("RandomBranchNode",{p.."chance"});b.branch(10,"finish") end
     for _,name in ipairs({"jumps","head","tail","queued","wave"}) do b.zero(name) end
+    b.load(p.."delay");b.save("active_delay")
+    delay("initial")
+    -- Refresh a surviving initial victim after the delay. A killing hit may
+    -- still spread from the saved impact position if its actor has disappeared.
+    b.call("IsValidEntity",{context.initial});branch(10,"parent")
+    b.done("GetTransform",{context.initial,false,"origin"})
     mark("parent")
     b.zero("children");b.zero("last_set")
     b.done("FromTransform",{false,"origin",false,false,false,"origin_position"})
@@ -79,7 +119,7 @@ function M.emit(b,profile,context)
     b.zero("found");b.zero("index")
     mark("candidate")
     b.call("ForEachEntityWithFactionInRange",qa,qid);branch(10,"selected")
-    b.call("IsValidEntity",{"candidate"});branch(10,"candidate")
+    living("candidate","candidate")
     b.call("IsSameEntity",{"candidate",context.initial});branch(9,"candidate")
     b.call("IsEnemy",{context.root,"candidate"});branch(10,"candidate")
     b.call("IsConsecutiveHit",{"candidate"});branch(9,"candidate")
@@ -111,7 +151,6 @@ function M.emit(b,profile,context)
     b.uless("candidate_value","best_value");branch(10,"candidate")
     mark("remember")
     b.load("candidate_value");b.save("best_value")
-    b.load("index");b.emit(15);b.save("best_index")
     b.load("distance");b.save("best_distance")
     b.copy("candidate_transform","best_transform")
     b.emit(13);b.save("found");branch(8,"candidate")
@@ -122,15 +161,20 @@ function M.emit(b,profile,context)
     b.equal("queued","capacity");b.branch(9,"finish")
     b.load("best_distance");b.save("last_distance")
     b.load("best_value");b.save("last_id");b.emit(13);b.save("last_set")
-    -- Copy the selected entity ID through the native query output. The generic
-    -- AddValues node converts even uint32 through float32 and cannot copy IDs
-    -- exactly above 2^24. Re-query the saved index without yielding, then verify
-    -- identity before damage; a reordered/disappearing result is skipped.
-    qptr("tail");b.load("best_index");b.save("index")
-    b.call("ForEachEntityWithFactionInRange",{p.."radius","origin","factions","index",false,{dynamic="q_entity"}},qid)
-    branch(10,"recheck_failed")
-    b.call("IsSameEntity",{"best",{dynamic="q_entity"}});branch(10,"recheck_failed")
-    b.done("DestroyFactionQuery",qa,qid)
+    living("best","select")
+    -- Store the exact selected ID without reopening an order-unstable query.
+    -- GStore requires a static scalar layout reference. A balanced dispatch
+    -- selects that reference in O(log capacity); no float conversion is used.
+    local function store_id(lo,hi)
+        if lo==hi then
+            b.load("best_value");b.save("frontier_value_"..lo);branch(8,"id_stored")
+        else
+            local mid=math.floor((lo+hi+1)/2);local right="store_"..mid
+            b.load("tail");b.load("frontier_index_"..mid);b.emit(5);branch(10,right)
+            store_id(lo,mid-1);mark(right);store_id(mid,hi)
+        end
+    end
+    store_id(0,b.capacity-1);mark("id_stored")
     b.done("FromTransform",{false,"best_transform",false,false,false,"position"})
     local args=context.damage_args(p)
     b.call("ApplyDamage",args);branch(10,"select")
@@ -144,20 +188,20 @@ function M.emit(b,profile,context)
     b.inc("queued");b.inc("children");b.inc("jumps")
     b.emit(13);b.save("pending_work")
     branch(8,"select")
-    mark("recheck_failed");b.done("DestroyFactionQuery",qa,qid);branch(8,"select")
     mark("parent_done")
     b.load("wave");branch(9,"dequeue")
     b.load("queued");b.branch(10,"finish")
-    -- All parents in a generation fan out before yielding. One engine update
-    -- completes the generation's damage, then its children become spreaders.
-    b.emit(28);b.zero("pending_work");b.load("queued");b.save("wave")
+    delay("generation");b.load("queued");b.save("wave")
     mark("dequeue")
     qptr("head")
-    b.call("IsConsecutiveHit",{{dynamic="q_entity"}});b.branch(10,"finish")
     b.copy({dynamic="q_transform"},"origin")
     advance("head","head_advanced")
     b.load("queued");b.emit(15);b.save("queued")
     b.load("wave");b.emit(15);b.save("wave")
+    -- A failed branch must not cancel siblings. Dequeue first, then skip it.
+    b.call("IsConsecutiveHit",{{dynamic="q_entity"}});branch(10,"parent_done")
+    b.call("IsValidEntity",{{dynamic="q_entity"}});branch(10,"parent")
+    b.done("GetTransform",{{dynamic="q_entity"},false,"origin"})
     branch(8,"parent")
     local saved=b.code;b.code=b.shutdown;b.done("DestroyFactionQuery",qa,qid);b.code=saved
 end
@@ -165,7 +209,13 @@ function M.finish(b)
     b.mark("finish")
     -- A finite budget or full frontier may end in the middle of a generation.
     -- Let already submitted damage finish before destroying its source Impact.
-    b.load("pending_work");b.branch(10,"finish_ready");b.emit(28)
+    b.load("pending_work");b.branch(10,"finish_ready")
+    b.load("active_delay");b.save("delay_left");b.emit(25);b.save("clock")
+    b.mark("finish_wait");b.emit(28)
+    b.emit(25);b.load("clock");b.emit(2);b.save("elapsed")
+    b.uless("elapsed","delay_left");b.branch(10,"finish_ready")
+    b.load("delay_left");b.load("elapsed");b.emit(2);b.save("delay_left")
+    b.emit(25);b.save("clock");b.branch(8,"finish_wait")
     b.mark("finish_ready")
 end
 return M

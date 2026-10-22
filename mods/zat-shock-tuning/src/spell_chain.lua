@@ -3,10 +3,12 @@ local B=require("impact_builder")
 local propagation=require("chain_propagation")
 local M={}
 function M.plan(settings,radius,cast,api)
-    api.keys(settings,{enabled=true,targets_per_spread=true,max_jumps=true},"chain_lightning.propagation")
+    if type(settings)=="table" and settings.spread_delay_ms==nil then settings.spread_delay_ms=250 end
+    api.keys(settings,{enabled=true,targets_per_spread=true,max_jumps=true,spread_delay_ms=true},"chain_lightning.propagation")
     if type(settings.enabled)~="boolean" then api.fail("chain_lightning.propagation.enabled must be true or false") end
     api.number(settings.targets_per_spread,"uint32","chain_lightning.propagation.targets_per_spread")
     api.number(settings.max_jumps,"uint32","chain_lightning.propagation.max_jumps")
+    api.number(settings.spread_delay_ms,"uint32","chain_lightning.propagation.spread_delay_ms")
     if not settings.enabled then return end
     local p=api.resource("e28f0d79-e2fe-46ba-8d82-9ba368cb30c7","keen::ImpactProgram")
     local signature={}
@@ -29,12 +31,11 @@ function M.plan(settings,radius,cast,api)
     -- sequence supplies true; other native sequences keep the original flow.
     b.bool("enabled",false,config_id)
     local profile={key="spell",config={targets_per_spread=settings.targets_per_spread,
-        max_jumps=settings.max_jumps,spread_radius=radius,chance_percent=100}}
+        max_jumps=settings.max_jumps,spread_radius=radius,chance_percent=100,spread_delay_ms=settings.spread_delay_ms}}
     propagation.prepare(b,{profile},api)
     local pre=#b.code
     b.load("enabled");b.branch(10,"capture_done")
-    b.call("IsEnemy",{"GetRoot::entityId","Get_targetlock::targetId"});b.save("eligible")
-    b.done("GetTransform",{"Get_targetlock::targetId",false,"origin"})
+    propagation.capture(b,"Get_targetlock::targetId","GetRoot::entityId")
     b.mark("capture_done");b.emit(8,98) -- retain the original timer pop and initial damage.
     local post=#b.code
     b.load("enabled");b.branch(9,"spell_start");b.emit(8,143)

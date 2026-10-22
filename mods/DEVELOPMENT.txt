@@ -86,3 +86,22 @@ Tests use byte-addressed storage for aliases and dynamic ECall pointers, model
 queued damage on RVM, and include IDs above 2^24/2^31. The upstream disassembler
 accepts IConst variable references but panics on scalar IConst even though the
 native VM accepts it; numeric constants therefore use typed data + GLoad.
+
+
+0.3.0-alpha.2 supersedes the alpha.1 query-copy/lifetime notes above:
+- Entity IDs are stored via uint32 aliases selected by balanced slot dispatch,
+  never by reopening a query at the saved index. Padding stores slot constants.
+- StateFlag.Dead plus positive optional current HP excludes lingering corpses.
+- All factions queried, then IsEnemy(caster, candidate) filters hostility.
+- Configurable uint32-ms delay, wrap-safe elapsed countdown, live origin refresh.
+- Missing confirmation skips one queued branch instead of terminating siblings.
+- Enabled arrow templates remove only server LifeTime; a guarded entry trampoline
+  preserves their five-second flight timeout until the hit path owns cleanup.
+  Disabled/unrelated ammo and native spell fallback retain original paths.
+- See VALIDATION.txt and validate_chain_fanout.py for modeled/native distinctions.
+
+Alpha.2 final local validation: 98 checks (26 arrow/regression, 49
+fan-out/lifecycle, 23 scalar) plus isolated native Run in 12.2 s.
+Startup is reproducible with mods/validate_chain_startup.py --fixture-dir <fixture>.
+Package SHA256: 459a586f278f0471ba52e3b3eec0d942fa7e823dc78ae1b8760daed1842266b9
+The fixture config/index were restored; no connected clients or combat test.

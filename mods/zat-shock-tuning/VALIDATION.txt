@@ -1,74 +1,60 @@
-Zat Shock Tuning 0.3.0-alpha.1 validation - 2026-10-21
+Zat Shock Tuning 0.3.0-alpha.2 validation - 2026-10-21
 
-IMPLEMENTED SCOPE
-Nearest-first branching in eternal shock-arrow tiers 20/36/45 and opt-in
-propagation for the five player chain-lightning spells. Shared generation queue,
-pending-target reservations, completed native hit history and per-spreader 3D
-radius. Existing raw damage, mana and other scalar controls retained.
-max_jumps remains the total secondary-target budget; 0 removes that budget.
+CHANGES FROM 0.3.0-alpha.1
+- Candidates must pass existence, Dead-state, positive HP and caster-hostility checks.
+- All faction bits queried; target distance is independent of species/faction.
+- Selected IDs stored through exact uint32 views and balanced slot dispatch.
+  No saved-index query reopen, float ID conversion or dependence on enumeration order.
+- Unconfirmed spreaders skip their branch without canceling confirmed siblings.
+- spread_delay_ms defaults to 250, before the first spread and each generation.
+  Per arrow tier and spell profile. Zero yields one update. Whole uint32 milliseconds;
+  countdown uses wrapping clock differences and unsigned comparisons.
+- Living spreaders refresh position after the delay. Removed victims retain the
+  recorded impact origin, so a killing hit can continue to living targets.
+- Enabled shock-arrow templates replace the server-only five-second LifeTime
+  component with an Impact flight watchdog. Missed arrows still expire; active
+  propagation continues until completion, native frontier exhaustion, or other
+  engine cleanup. No duration or total-hit balance cap is added.
+- Partial final generations wait their configured delay before source destruction.
 
-AUTOMATED RESULTS
-77 checks passed: 26 arrow/regression checks, 28 fan-out checks, 23 scalar checks.
-EML 0.2.0 was invoked through ESM-Z's existing adapter in a disposable revision
-1273043 dedicated-server fixture. The archive imported, configured and applied;
-upstream kfc-parser exported/disassembled the actual patched programs. Native
-branch/type/stack audits pass. Original program bodies/data remain unchanged
-except for two redirected branch operands in each program. The spell changes
-are gated by one added boolean in the selected player casting sequence; its
-shared program default is false. Default configuration produces zero patches.
+VALIDATION
+Tests use official EML 0.2.0 through the ESM-Z adapter in a disposable dedicated
+server revision 1273043 fixture. They import the actual ZIP, apply configurations,
+export patched assets through upstream kfc-parser, and audit native operand types,
+branch targets and stack balance. Defaults produce zero patches; restoration
+returns the exact original game index. Existing scalar and old-config tests pass.
 
-Modeled execution covers:
-- Adversarial far-first query order; nearest-first selection in both programs.
-- 3D distances including elevation and deterministic equal-distance ID ties.
-- Three children followed by nine grandchildren from each parent's position.
-- Converging branches: a pending victim cannot be selected twice.
-- Independent arrow-tier fan-out and shared total-victim budgets.
-- Initial and secondary killing hits retaining their recorded origin.
-- Blocked/rejected candidates not causing an endless retry or blocking others.
-- 1,100-target lines exceeding the ring's capacity through slot reuse.
-- Missing native history stopping propagation without repeating hits.
-- Full-width entity IDs beyond 2^24 and 2^31, copied without float rounding.
-- Full uint32 fan-out and jump settings accepted without balance clamping.
-- A finite budget waits for submitted damage before destroying the source.
-- Native frontier exhaustion stops before an out-of-bounds write.
-- Unsupported input, negative/fractional/nonfinite/overflowing fan-out rejected.
-- Previous alpha.1 ItemId-load defect and alpha.2 immediate-history defect remain
-  reproducible using their original packages. The new package passes both fixes.
-- Existing scalar integration, independent fields, legacy configs, apply recovery,
-  repeat apply and byte-for-byte restoration of the original game index.
-
-The harness executes emitted bytecode but MODELS the native functions. It is
-not a combat test and does not prove multiplayer authority or VFX replication.
-The game queries, timing, entity ownership and actual damage still require play.
+The bytecode harness executes emitted instructions with MODELED native calls.
+It covers corpses and zero/negative/missing health, mixed factions, reordered
+queries, 3D nearest selection, fan-out, converging branches, independent profiles,
+blocked/rejected hits, failed sibling confirmation, delayed history, moving
+spreaders, killing hits, exact large entity IDs, native queue reuse, finite budgets,
+clock rollover, zero delay and full uint32 delays. A 1,100-target modeled chain
+continues beyond five seconds. Separate flight-watchdog tests exercise misses at
+4,999/5,000 ms and timer rollover. Only enabled shock templates lose LifeTime and gain a private watchdog opt-in;
+other template fields are preserved. The watchdog follows the template flag,
+so it also cleans up a marked projectile spawned without ammunition metadata. Previous damage-loss and
+single-hop packages remain covered by regression tests.
 
 NATIVE EVIDENCE
-Read-only inspection used dedicated-server revision 1273043 executable SHA256
+Read-only inspection of revision 1273043 executable SHA256:
  d7baa768eb00aa895d9f5a1cd8747ccf66858c7b542f50983092b2e3261588ee
-- ApplyDamage queues work; native hit history is updated by damage processing.
-- GLoad/GStore reject ItemId/EntityId structs. Scalar aliases share their bytes.
-- ILT is signed; unsigned ordering uses a wrapping sign-bit adjustment.
-- Native AddValues/SubValues convert numeric scalars through float32. They are
-  suitable for position deltas, not full-width entity IDs. The selected ID is
-  written by a native query output and verified before damage is submitted.
-- FromTransform.position returns world coordinates; referenceTransform does not
-  subtract them. X/Y/Z deltas are computed explicitly before GetLength.
-- Impact code/stack indices and data offsets have native 16-bit representation.
-  Frontier allocation derives from remaining storage; it is not a balance cap.
-  All-arrow unlimited branching holds 996 pending spreaders; spells hold 989.
-  The original arrow lifetime remains five seconds. No map-wide guarantee.
+Reflection identifies actor.StateFlag.Dead=7, the 16-bit FactionMask, current HP
+reference used by an existing healing program, and LifeTime as server-only.
+Native LTime returns uint32 milliseconds; Time-valued GLoad converts nanoseconds
+to milliseconds. This extension stores delays as explicit uint32 milliseconds.
+GLoad/GStore only accept scalar types; aliases preserve EntityId bytes exactly.
+Native generic numeric arithmetic uses float32, so it is not used for ID copies.
+The faction iterator destroys its cached query on exhaustion. Native damage is
+queued, with completed-hit history populated by later damage processing.
 
-STARTUP CHECK
-An isolated loopback-only, password-protected server with fresh disposable world,
-all three arrow tiers enabled, spell propagation enabled and fan-out 3 reached
-Host_Online and Run. Its process was then stopped, and the original fixture
-server config and game index restored. See the local fanout-startup-result.json
-for the exact final package check. No real clients connected or combat exercised.
-No production server, installed game client, or user save was changed.
-
-NEXT PLAY TEST
-Use unmodified clients. With fan-out 1, place one enemy beside the initial victim
-and another farther away within radius; verify actual health loss follows the
-closer enemy first. Then set fan-out 3 and verify each first-generation victim
-can reach its own children outside the initial victim's radius. Check converging
-branches, killing hits, finite total budgets, other arrow tiers, and a chain
-spell. Repeat with two players to verify independent casts and attribution.
+LIMITS / PLAY TEST
+An import, model test or successful startup is NOT a combat test. Live multiplayer
+must verify actual health loss, native HP/state availability across enemy types,
+250 ms cadence and VFX, independent simultaneous casts, and cleanup of misses and
+completed chains. Test mixed species beside corpses with fan-out 1, then fan-out 3;
+include a chain lasting over five seconds. Only loaded/queryable targets qualify.
+The queue is limited by native 16-bit data offsets, not a balance setting; capacity
+is logged on Apply and slots are reused. Extremely wide frontiers stop safely.
+Long/wide chains can impose significant server work. Map-wide behavior is unverified.
+No production server, installed client, or user save is modified by validation.

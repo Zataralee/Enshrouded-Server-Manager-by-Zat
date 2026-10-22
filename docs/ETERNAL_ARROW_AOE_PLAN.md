@@ -373,3 +373,18 @@ not need a local compiler, copied game archives or server desktop access.
 - `dist/shock-mod-validation-20261021/test-run-011.log`: package validation.
 
 No production server, installed game client or user world was modified.
+
+
+## 0.3.0-alpha.2 testing fixes
+
+The next server-test package filters initial and secondary targets by Dead state
+and positive current HP, queries all factions before caster-hostility filtering,
+and stores selected IDs directly without reopening queries by index. A missing
+hit confirmation skips one branch instead of canceling its siblings.
+`spread_delay_ms` defaults to 250 before the first spread and between generations;
+old configurations inherit that default. Living spreaders refresh position after
+the delay. Enabled shock-arrow templates replace only their server LifeTime
+component with a five-second flight watchdog; active chains use their own cleanup
+and are no longer deliberately cut off by the flight timer. This requires live
+combat/cleanup testing. Native storage and streaming limits remain; no map-wide
+multiplayer claim. See `mods/zat-shock-tuning/VALIDATION.txt` for evidence and limits.
