@@ -1,3 +1,13 @@
+Fire-arrow alpha.2 (2026-10-22):
+    python mods/validate_fire_arrows.py --fixture-dir <fixture> --regression-package dist/mods/Zat-Shock-Tuning-v0.4.0-alpha.1.zip
+Native ignoreConsecutiveHits=true SKIPS prior victims. Fire ticks require false;
+shock deliberately keeps true. Original alpha.1 tests had the semantics backwards.
+Ground fire adds a stationary query phase at frame end, using the same ignition
+ledger and shared budget. Do not let ground expiry cancel already burning victims.
+Spawn the client-known visual-only bonfire with explicit projectile parent and
+addDespawnLink=true; remove it at expiry/logout and in codeShutdown. No new IDs or
+global template changes. Ground VFX scaling/terrain alignment require live testing.
+
 Shock Tuning development
 
 Fire-arrow alpha (0.4.0-alpha.1):
@@ -16,7 +26,8 @@ At capacity, stop adding records, service every existing burn and then destroy.
 
 Burn ticks retain the original Damage.fire, attack coefficient, source and native
 ranged scaling inputs, while using a fire-only DamageSetup and no crit/push/stagger.
-Use ignoreConsecutiveHits for ticks; never derive propagation from damage history.
+Set ignoreConsecutiveHits=false for ticks: true skips already-hit entities.
+The alpha.1 model interpreted this backwards. Never derive propagation from damage history.
 Each record has independent duration, unpaid tick time, spread countdown and clock.
 One frame services the records present at frame start; newly added records wait
 until the next frame, including a zero configured delay. A final partial tick

@@ -1,11 +1,11 @@
 {
   "id": "zat-shock-tuning",
   "name": "Zat Shock Tuning - Server Test",
-  "version": "0.4.0-alpha.1",
+  "version": "0.4.0-alpha.2",
   "capabilities": [
     "patch"
   ],
-  "description": "Configurable eternal fire-arrow ignition, spreading burns and fire-only DoT, plus existing shock and spell tuning. Experimental server test; combat validation required.",
+  "description": "Configurable eternal fire-arrow spreading burns and lingering ground ignition, with corrected damage ticks, plus shock and spell tuning. Experimental server test; combat validation required.",
   "authors": [
     "Zataralee"
   ],

@@ -559,3 +559,22 @@ checks, including the first/middle/last physical ledger records, finite and
 full-width time values, partial ticks, mixed shock/fire and old-config behavior.
 Tests restore the exact clean game index. Combat validation remains required
 before describing bow bonuses or unmodified-client multiplayer as proven.
+
+
+### 2026-10-22 alpha.2 correction and lingering ground fire
+
+The user's 10,000 ms duration, 50 ms ticks and 0.2 strength revealed a native
+hit-history mistake: ApplyDamage.ignoreConsecutiveHits=true skips previous victims.
+The original target therefore received no DoT and secondaries only one small tick.
+Use false for DoT, retain the independent ignition ledger, and keep shock unchanged.
+Reflection tooltip and native history-gate disassembly support this correction;
+tests now reproduce the shipped alpha.1 failure rather than assuming every call lands.
+
+Optional ground fire stays at the saved first victim root, queries initial_radius
+each update, and ignites new eligible hostiles with the same burn and propagation.
+Each arrow ignites each victim once. Ground duration is independent; the ledger and
+max_jumps budget also apply to late entrants. Existing burns finish after ground expiry.
+The native visual-only DoNotSave bonfire template d0d55bba-7951-4213-8c2d-f8efb416fa2a
+is spawned with owned cleanup and horizontal scaling. It is not edited globally.
+Flame coverage/replication and sloped-ground alignment remain live test requirements.
+This sphere-based area does not terrain-snap or cause terrain/building damage.

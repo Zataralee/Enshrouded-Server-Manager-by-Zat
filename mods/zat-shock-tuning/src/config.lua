@@ -1,4 +1,4 @@
--- Zat Shock Tuning 0.4.0-alpha.1. Edit through ESM-Z > Mods > Configure.
+-- Zat Shock Tuning 0.4.0-alpha.2. Edit through ESM-Z > Mods > Configure.
 -- Stop the server, save, Apply & Validate Mods, then start the server.
 -- All shipped numbers preserve vanilla gameplay. config.defaults.lua is a backup.
 -- Distances are game units; the exact in-game geometry needs multiplayer testing.
@@ -70,6 +70,11 @@ return {
     },
     fire_arrows = {
         -- EXPERIMENTAL: initially disabled. Each tier is independent.
+        -- ground_fire_enabled: linger at the initial radius and ignite new entrants.
+        -- ground_fire_duration_ms: ground lifetime, independent of each victim burn.
+        -- ground_fire_visual_scale: horizontal bonfire size multiplier (0 hides it).
+        -- Visual footprint is approximate; test slopes/replication in multiplayer.
+        -- One ignition per enemy per arrow; ground entrants share max_jumps/ledger.
         -- Normal arrow impact stays intact. Ignition adds NO instant blast.
         -- initial_radius ignites living hostiles around the first hit.
         -- Each burning victim spreads to its nearest living, non-Soaked hostiles.
@@ -85,15 +90,15 @@ return {
         -- Each arrow has its OWN burn: repeated arrows stack independently.
         -- Suggested start: radius 3/5, fan-out 3, delay 350 ms, duration 5000 ms,
         -- tick 500 ms, strength 0.2. Suggestions only; no balance caps.
-        fire_15 = { enabled = false, chance_percent = 100, initial_radius = 3.0, spread_radius = 5.0, targets_per_spread = 3, spread_delay_ms = 350, max_jumps = 0, burn_duration_ms = 5000, burn_tick_ms = 500, burn_damage_multiplier_per_second = 0.2 },
-        fire_28 = { enabled = false, chance_percent = 100, initial_radius = 3.0, spread_radius = 5.0, targets_per_spread = 3, spread_delay_ms = 350, max_jumps = 0, burn_duration_ms = 5000, burn_tick_ms = 500, burn_damage_multiplier_per_second = 0.2 },
-        fire_45 = { enabled = false, chance_percent = 100, initial_radius = 3.0, spread_radius = 5.0, targets_per_spread = 3, spread_delay_ms = 350, max_jumps = 0, burn_duration_ms = 5000, burn_tick_ms = 500, burn_damage_multiplier_per_second = 0.2 },
+        fire_15 = { enabled = false, chance_percent = 100, initial_radius = 3.0, spread_radius = 5.0, targets_per_spread = 3, spread_delay_ms = 350, max_jumps = 0, burn_duration_ms = 5000, burn_tick_ms = 500, burn_damage_multiplier_per_second = 0.2, ground_fire_enabled = false, ground_fire_duration_ms = 5000, ground_fire_visual_scale = 1.0 },
+        fire_28 = { enabled = false, chance_percent = 100, initial_radius = 3.0, spread_radius = 5.0, targets_per_spread = 3, spread_delay_ms = 350, max_jumps = 0, burn_duration_ms = 5000, burn_tick_ms = 500, burn_damage_multiplier_per_second = 0.2, ground_fire_enabled = false, ground_fire_duration_ms = 5000, ground_fire_visual_scale = 1.0 },
+        fire_45 = { enabled = false, chance_percent = 100, initial_radius = 3.0, spread_radius = 5.0, targets_per_spread = 3, spread_delay_ms = 350, max_jumps = 0, burn_duration_ms = 5000, burn_tick_ms = 500, burn_damage_multiplier_per_second = 0.2, ground_fire_enabled = false, ground_fire_duration_ms = 5000, ground_fire_visual_scale = 1.0 },
     },
     mass_destruction = {
         -- Existing skill only: retains its staff/wand critical-hit requirement.
         radius = 15,                 -- Suggested: 1 to 30; nonnegative signed 32-bit integer.
         damage_per_intelligence = 2, -- Suggested: 0 to 10; unsigned 32-bit integer, before combat processing.
     },
-    -- No persistent burning ground, ice/bone AOE,
+    -- No ice/bone AOE,
     -- per-jump falloff, global shock debuffs or stun changes. No inactive toggles.
 }

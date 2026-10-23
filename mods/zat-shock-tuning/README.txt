@@ -1,6 +1,9 @@
-Zat Shock Tuning 0.4.0-alpha.1 - ETERNAL FIRE ARROW IGNITION AND SPREADING BURNS
+Zat Shock Tuning 0.4.0-alpha.2 - ETERNAL FIRE ARROW IGNITION AND SPREADING BURNS
 
-NEW: FIRE ARROWS (EXPERIMENTAL SERVER TEST)
+BURN DAMAGE FIX AND LINGERING GROUND FIRE (EXPERIMENTAL SERVER TEST)
+Alpha.1 set ignoreConsecutiveHits=true, which tells the engine to SKIP enemies
+already hit. Alpha.2 sets it false for burn ticks. The explicit ignition ledger
+still prevents repeated ignition. Your original damage settings can be retained.
 Eternal fire arrows 15/28/45 now have independent fire_arrows profiles. Defaults
 are disabled. Old configs without this section keep fire propagation disabled.
 Normal impact damage remains intact. The new effect ignites the initial victim
@@ -24,6 +27,8 @@ Configure > src/config.lua, under fire_arrows, example:
         targets_per_spread = 3, spread_delay_ms = 350, max_jumps = 0,
         burn_duration_ms = 5000, burn_tick_ms = 500,
         burn_damage_multiplier_per_second = 0.2,
+        ground_fire_enabled = true, ground_fire_duration_ms = 5000,
+        ground_fire_visual_scale = 1.0,
     },
 The fire_15 and fire_28 profiles have exactly the same settings.
 
@@ -35,6 +40,31 @@ first ignition to the struck enemy; spread_radius = 0 disables later spread.
 burn_duration_ms = 0 disables the burn entirely. Tick/delay 0 means next engine
 update, never an unbounded no-wait loop. Delays longer than the remaining burn
 cannot propagate after it expires. Recommendations are not balance caps.
+
+LINGERING GROUND FIRE
+Optional per tier, disabled by default and when omitted from an old config.
+ground_fire_enabled=true creates an ignition area at the initial victim's saved
+feet/root position, using initial_radius and ground_fire_duration_ms. It remains
+stationary and checks for new living hostile, non-Soaked enemies each update.
+Each entrant receives a full independent burn using that arrow's existing damage,
+timing and spread settings; it can spread onward. Existing victims are not refreshed
+or re-ignited by this same arrow. Entrants share max_jumps and the retained ledger.
+No instant explosion or separate damage multiplier is added. Zero ground duration
+or initial radius disables the area. A missed/blocked arrow does not create it.
+
+A client-known bonfire visual marks the area. Its horizontal transform scale is
+initial_radius * ground_fire_visual_scale; height stays at native scale. A visual
+scale of zero hides the flame without disabling ignition. This is an approximate
+visual footprint, not an exact radius outline. The effect is anchored at the first
+victim's feet, not terrain-conforming: hills, stairs and flying enemies can produce
+clipping or floating flames. Native client replication/scaling needs live testing.
+The area uses the same 3D sphere query as initial ignition, not a ground collision
+mesh or line-of-sight raycast. It cannot spread fire to buildings or terrain.
+
+Ground expiry removes the visual and stops new entrants; existing enemy burns
+finish independently. Shooter disappearance and Impact shutdown remove the visual.
+The spawned visual is DoNotSave, linked to the arrow for despawn, and has no combat
+program/collider. No shared bonfire template or global fire buff is changed.
 
 FIRE DAMAGE AND BOW BONUSES
 burn_damage_multiplier_per_second scales the shot's FIRE component per second.
@@ -59,10 +89,8 @@ they do not refresh or replace a previous shot's damage. Two shooters likewise
 retain separate source IDs. One shot cannot ignite a victim twice, even at zero
 burn strength or when branches meet. This uses an explicit retained ID ledger.
 Unlike the shock queue, its visited slots are NOT reused after burn expiry.
-The current compiled fire ledger supports 970 victims with all fire tiers alone,
-972 with fire45 alone, and 398 with all three fire and shock tiers enabled at
-fan-out 3. These are derived from native 16-bit instruction/data limits, not
-balance caps; the actual capacity is logged on Apply for your configuration.
+The compiled capacity is derived from remaining native 16-bit instruction/data
+limits and logged on Apply for your exact configuration.
 At capacity, new ignitions stop and all existing burns finish normally. Thus
 max_jumps = 0 does not promise an infinite or map-wide fire chain. Only loaded,
 queryable hostiles participate. Large radii, many victims or repeated stacking

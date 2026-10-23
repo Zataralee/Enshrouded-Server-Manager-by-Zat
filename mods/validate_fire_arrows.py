@@ -6,6 +6,7 @@ import math
 from pathlib import Path
 import struct
 import subprocess
+import zipfile
 from test_arrow_chain_program import Program, VM
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +23,7 @@ class FireVM(VM):
         self.set('Damage.Magical_Fire::value', 50)
         self.set('mul2::result', 1.5)
         self.ignitions, self.burn_ticks, self.visual_leases = [], [], []
+        self.ground_visuals, self.ground_destroyed = [], []
         self.soaked, self.soak_at = set(), {}
         self.death_at, self.logout_at = {}, math.inf
         self.tick_ms = 100
@@ -29,7 +31,7 @@ class FireVM(VM):
 
     def native(self, call_id, function):
         name, params = self.program.functions[function]
-        handled = {'HasBuffNode', 'HasEntityTag', 'ApplyBuff', 'MulValues', 'ApplyDamage', 'IsValidEntity', 'IsInState'}
+        handled = {'HasBuffNode', 'HasEntityTag', 'ApplyBuff', 'MulValues', 'ApplyDamage', 'IsValidEntity', 'IsInState', 'GetSelf', 'SpawnEntity', 'DestroyEntity'}
         if name not in handled: return super().native(call_id, function)
         args, refs = {}, {}
         for role in ('out', 'cfg', 'in'):
@@ -37,7 +39,22 @@ class FireVM(VM):
                 if kind == role:
                     ptr = self.stack.pop(); refs[key] = ptr; args[key] = self.read(ptr)
         result = True
-        if name == 'IsValidEntity':
+        if name == 'GetSelf': self.write(refs['entityId'], 2)
+        elif name == 'SpawnEntity':
+            import uuid
+            assert args['templateInput'] == uuid.UUID('d0d55bba-7951-4213-8c2d-f8efb416fa2a').bytes_le
+            assert args['parentEntityId']==2 and args['addDespawnLink']==1
+            assert args['breakImpactHierarchy']==1 and args['targetEntityId'] is None
+            entry=self.program.layout[refs['transform'] & 0xffff]
+            rotation_scale=struct.unpack_from('<7f',self.mem,entry['offsetInBytes']+24)
+            assert rotation_scale[:4]==(0,0,0,1) and rotation_scale[5]==1
+            assert rotation_scale[4]==rotation_scale[6]
+            self.ground_visuals.append((self.now,args['transform']))
+            self.write(refs['entityId'],1000)
+        elif name == 'DestroyEntity':
+            assert args['entityId']==1000
+            self.ground_destroyed.append(self.now)
+        elif name == 'IsValidEntity':
             e = args['entityId']; result = self.now < self.logout_at if e == 1 else e in self.positions
         elif name == 'IsInState':
             e = args['entityId']; result = e in self.dead_targets or self.now >= self.death_at.get(e, math.inf)
@@ -57,7 +74,11 @@ class FireVM(VM):
             self.write(refs['result'], args['valueA'] * args['valueB'])
         elif name == 'ApplyDamage':
             assert args['sourceId'] == 1
-            assert args['ignoreConsecutiveHits'] == 1
+            # Native tooltip: true ignores entities that were ALREADY hit.
+            # Model the filter rather than assuming every submitted tick lands.
+            if args['ignoreConsecutiveHits'] and args['targetId'] in self.visited:
+                self.stack.append(0)
+                return
             assert args['canCrit'] == 0 and args['canBeBlocked'] == 0
             for key in ('manaCost', 'specialAbilityGain', 'attackStaminaMod', 'noiseRange'):
                 assert args[key] is None
@@ -71,11 +92,13 @@ class FireVM(VM):
             assert args['attackMod'] == 1.5
             assert self.now > 0  # No instant ignition blast.
             self.burn_ticks.append((self.now, args['targetId'], damage[3]*args['attackMod']))
+            self.visited.add(args['targetId'])
         self.stack.append(int(result))
 
     def execute(self, overrides=None, kill_initial=False, blocked=False):
         for key, value in (overrides or {}).items(): self.set('ZatArrowChain::fire_45_fire_'+key, value)
         self.run(self.program.code[89], {94})
+        self.visited.add(10)  # Original arrow hit precedes the burn controller.
         if kill_initial: self.positions.pop(10)
         if not blocked: self.run(self.program.code[211], {191})
         assert not self.stack and not self.queries
@@ -97,10 +120,46 @@ def check(p):
         assert math.isclose(sum(x[2] for x in v.burn_ticks), 75, rel_tol=1e-6)
         assert v.burn_ticks[-1][0] == 5000
     record('all fire tiers: independent 5-second fire-only burns, original source/category/scaling inputs retained')
-    for tick in (0, 100, 333, 500, 777, 10000):
+    for tick in (0, 50, 100, 333, 500, 777, 10000):
         v = run(overrides={'tick': tick}, tick_ms=100)
         assert math.isclose(sum(x[2] for x in v.burn_ticks), 75, rel_tol=1e-6)
     record('tick interval does not multiply DPS; final partial tick and zero interval are accounted for')
+    v=run(positions={10:0,11:2},overrides={'duration':10000,'tick':50},tick_ms=50)
+    for target in (10,11):
+        ticks=[d for _,e,d in v.burn_ticks if e==target]
+        assert len(ticks)==200 and math.isclose(sum(ticks),150,rel_tol=1e-6)
+    record('reported 50ms/10s settings repeatedly damage original and secondary victims despite native hit history')
+    ground={'ground_duration':1000,'ground_scale':3,'fanout':0,'duration':500,'tick':100}
+    v=run(positions={10:0,11:20,12:20},overrides=ground,moves={4:{11:(2,0,0)},11:{12:(2,0,0)}})
+    assert targets(v)==[10,11] and next(t for t,e,_ in v.ignitions if e==11)==400
+    assert len(v.ground_visuals)==1 and v.ground_destroyed==[1000]
+    assert math.isclose(sum(d for _,e,d in v.burn_ticks if e==11),7.5,rel_tol=1e-6)
+    record('lingering initial area ignites late entrants, expires at its deadline and gives each entrant its own burn')
+    v=run(positions={10:0,11:20},overrides=ground,kill_initial=True,moves={6:{11:(2,0,0)}})
+    assert targets(v)==[11] and v.burn_ticks[-1][0]==1100 and v.ground_destroyed==[1000]
+    record('empty ground area survives the initial kill; entrant burns continue after ground expiry')
+    v=run(positions={10:0,11:20},overrides=ground,moves={4:{10:(100,0,0),11:(2,0,0)}})
+    assert 11 in targets(v) and v.ground_visuals[0][1]==(0,0,0)
+    record('ground origin stays at initial victim feet when that victim moves')
+    v=run(overrides=ground,logout_at=300)
+    assert v.ground_destroyed==[300]
+    record('shooter disappearance cleans up the lingering ground visual')
+    v=run(positions={10:0,11:20,12:20},overrides={**ground,'limit':1},moves={4:{11:(2,0,0),12:(1,0,0)}})
+    assert targets(v)==[10,12] and v.ground_destroyed==[1000]
+    record('ground entrants share the shot budget and select the nearest eligible newcomer first')
+    v=run(positions={10:0,11:20},overrides=ground,moves={4:{11:(2,0,0)}},soaked={11})
+    assert targets(v)==[10]
+    record('ground area does not ignite Soaked entrants')
+    v=run(overrides={**ground,'ground_scale':0})
+    assert not v.ground_visuals and not v.ground_destroyed
+    record('zero visual scale hides only the flames without disabling area lifetime')
+    v=FireVM(p)
+    v.set('ZatArrowChain::fire_ground_entity_value',1000)
+    saved=p.code;p.code=p.p['codeShutdown']
+    try: v.run(0,set())
+    finally:p.code=saved
+    assert v.ground_destroyed==[0] and not v.queries and not v.stack
+    record('Impact shutdown explicitly destroys its own ground visual')
     v = run(overrides={'duration': 1250, 'tick': 700}, tick_ms=100)
     assert math.isclose(sum(x[2] for x in v.burn_ticks), 18.75, rel_tol=1e-6)
     record('uneven duration and tick cadence pay exactly the configured burn time')
@@ -204,7 +263,8 @@ def check(p):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--fixture-dir',required=True,type=Path)
-    work=parser.parse_args().fixture_dir.resolve()
+    parser.add_argument('--regression-package',type=Path)
+    args=parser.parse_args();work=args.fixture_dir.resolve()
     assert (work/'SHOCK_MOD_TEST_FIXTURE').read_text().strip()=='disposable-shock-mod-test'
     spec=importlib.util.spec_from_file_location('eml',ROOT/'enshrouded_manager/eml_support.py')
     eml=importlib.util.module_from_spec(spec);spec.loader.exec_module(eml)
@@ -229,6 +289,17 @@ def main():
     try:
         mod.enable(True)
         if mid in mod.state()['mods']: mod.change_mod(mid,'remove')
+        if args.regression_package:
+            mod.import_zip(args.regression_package.read_bytes());mod.change_mod(mid,'enable')
+            with zipfile.ZipFile(args.regression_package) as z:
+                old_config=z.read(next(n for n in z.namelist() if n.endswith('src/config.lua'))).decode()
+            apply(old_config.replace('fire_45 = { enabled = false','fire_45 = { enabled = true'))
+            old_program,_=export('fire-alpha1-regression')
+            broken=FireVM(old_program,positions={10:0,11:2},tick_ms=50).execute({'duration':10000,'tick':50})
+            assert not any(e==10 for _,e,_ in broken.burn_ticks)
+            assert len(broken.burn_ticks)==1 and broken.burn_ticks[0][1]==11
+            results.append('shipped alpha.1 reproduces zero original-target ticks and one tiny secondary tick with native history semantics')
+            mod.change_mod(mid,'remove')
         mod.import_zip((ROOT/f'dist/mods/Zat-Shock-Tuning-v{version}.zip').read_bytes());mod.change_mod(mid,'enable')
         assert 'src/config.lua' in mod.config_file(mid)['files']
         apply(defaults);baseline,base_dir=export('fire-baseline')
@@ -262,6 +333,11 @@ def main():
         assert not FireVM(single,tier=28).execute().burn_ticks
         assert len(FireVM(single,tier=45).execute().burn_ticks)==10
         results.append('enabling only fire45 leaves disabled fire tiers and their templates untouched')
+        apply(only45.replace('ground_fire_enabled = false','ground_fire_enabled = true'))
+        ground_program,_=export('fire-ground-enabled')
+        ground_vm=FireVM(ground_program).execute()
+        assert len(ground_vm.ground_visuals)==1 and ground_vm.ground_destroyed==[5000]
+        results.append('ground options compile from uploaded config and execute without test overrides')
         # Full mix must compile within BOTH actual 16-bit native limits.
         apply(defaults.replace('enabled = false','enabled = true').replace('targets_per_spread = 1','targets_per_spread = 3'))
         mixed,_=export('fire-mixed-enabled')
@@ -269,11 +345,22 @@ def main():
         assert len(mixed.scenario().hits)==3
         assert len(FireVM(mixed).execute().burn_ticks)==10
         results.append('all three fire and shock tiers coexist within native limits; both controllers execute')
+        apply((ROOT/'mods/fixtures/fire_damage_report.lua').read_text())
+        reported,_=export('fire-reported-settings')
+        report_vm=FireVM(reported,positions={10:0,11:2},tick_ms=50).execute()
+        for target in (10,11):
+            ticks=[d for _,e,d in report_vm.burn_ticks if e==target]
+            assert len(ticks)==200 and math.isclose(sum(ticks),150,rel_tol=1e-6)
+        assert report_vm.ground_destroyed==[10000]
+        results.append('user tuning plus new ten-second ground fire imports and applies alongside enabled shock45')
         # Invalid fields must fail validation before any resource patch.
         for old,new in [('burn_tick_ms = 500','burn_tick_ms = -1'),
                         ('burn_duration_ms = 5000','burn_duration_ms = 1.5'),
                         ('initial_radius = 3.0','initial_radius = 1e400'),
-                        ('burn_damage_multiplier_per_second = 0.2','burn_damage_multiplier_per_second = 1e38')]:
+                        ('burn_damage_multiplier_per_second = 0.2','burn_damage_multiplier_per_second = 1e38'),
+                        ('ground_fire_enabled = false','ground_fire_enabled = 1'),
+                        ('ground_fire_duration_ms = 5000','ground_fire_duration_ms = -1'),
+                        ('ground_fire_visual_scale = 1.0','ground_fire_visual_scale = 1e400')]:
             try: apply(fire_config.replace(old,new))
             except Exception: pass
             else: raise AssertionError('invalid config accepted: '+new)

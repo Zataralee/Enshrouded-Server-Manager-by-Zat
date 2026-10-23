@@ -12,7 +12,8 @@ function M.defaults()
     local result={}
     for _,d in ipairs(defs) do result[d.key]={enabled=false,chance_percent=100,initial_radius=3,
         spread_radius=5,targets_per_spread=3,spread_delay_ms=350,max_jumps=0,
-        burn_duration_ms=5000,burn_tick_ms=500,burn_damage_multiplier_per_second=0.2} end
+        burn_duration_ms=5000,burn_tick_ms=500,burn_damage_multiplier_per_second=0.2,
+        ground_fire_enabled=false,ground_fire_duration_ms=5000,ground_fire_visual_scale=1} end
     return result
 end
 function M.validate(settings,api)
@@ -21,10 +22,19 @@ function M.validate(settings,api)
     local active={}
     for _,d in ipairs(defs) do
         local s=settings[d.key];local label="fire_arrows."..d.key
+        if type(s)=="table" then
+            if s.ground_fire_enabled==nil then s.ground_fire_enabled=false end
+            if s.ground_fire_duration_ms==nil then s.ground_fire_duration_ms=s.burn_duration_ms end
+            if s.ground_fire_visual_scale==nil then s.ground_fire_visual_scale=1 end
+        end
         api.keys(s,{enabled=true,chance_percent=true,initial_radius=true,spread_radius=true,
             targets_per_spread=true,spread_delay_ms=true,max_jumps=true,burn_duration_ms=true,
-            burn_tick_ms=true,burn_damage_multiplier_per_second=true},label)
+            burn_tick_ms=true,burn_damage_multiplier_per_second=true,ground_fire_enabled=true,
+            ground_fire_duration_ms=true,ground_fire_visual_scale=true},label)
         if type(s.enabled)~="boolean" then api.fail(label..".enabled must be true or false") end
+        if type(s.ground_fire_enabled)~="boolean" then api.fail(label..".ground_fire_enabled must be true or false") end
+        api.number(s.ground_fire_duration_ms,"uint32",label..".ground_fire_duration_ms")
+        api.number(s.ground_fire_visual_scale,"float32",label..".ground_fire_visual_scale")
         for _,key in ipairs({"chance_percent","initial_radius","spread_radius","burn_damage_multiplier_per_second"}) do
             api.number(s[key],"float32",label.."."..key)
         end
@@ -35,6 +45,7 @@ function M.validate(settings,api)
         if s.chance_percent>0 then api.number(s.chance_percent/100,"float32",label.." chance fraction") end
         -- Validate derived coefficients as well. This is storage safety, not a balance cap.
         api.number(s.burn_damage_multiplier_per_second*(s.burn_duration_ms/1000),"float32",label.." total burn multiplier")
+        api.number(s.ground_fire_visual_scale*s.initial_radius,"float32",label.." ground visual size")
         if s.enabled and s.chance_percent>0 and s.burn_duration_ms>0 then
             if api.resource(d.guid,"keen::ItemInfo").itemId.value~=d.id then api.fail(label..": unexpected ammunition ID") end
             active[#active+1]={key=d.key,def=d,config=s}
@@ -61,7 +72,32 @@ function M.prepare(b,profiles,api)
         if count~=1 then api.fail("Fire arrows: missing or duplicate native burning visual") end
     end
     for _,name in ipairs({"count","batch","slot","cursor","scan_id","capacity","now","dt","step",
-        "jumps","children","radius_mode","write_append","secondary","spread_due","any_work","record_stride","ledger_pointer","visual_refresh"}) do b.uint("fire_"..name,0) end
+        "jumps","children","radius_mode","write_append","secondary","spread_due","any_work","record_stride","ledger_pointer","visual_refresh",
+        "ground_remaining","ground_clock","ground_dt","ground_duration","ground_entity_value"}) do b.uint("fire_"..name,0) end
+    b.alias("fire_ground_entity","fire_ground_entity_value",1937543046)
+    b.add("fire_ground_owner",1937543046,string.pack("<I4",0),4)
+    b.native("fire_ground_origin","e28f0d79-e2fe-46ba-8d82-9ba368cb30c7","ImpactTransform::transform")
+    b.native("fire_ground_visual_transform","e28f0d79-e2fe-46ba-8d82-9ba368cb30c7","ImpactTransform::transform")
+    b.float("fire_ground_scale",1)
+    for _,axis in ipairs({{"x",40},{"z",48}}) do
+        b.alias("fire_ground_scale_"..axis[1],"fire_ground_visual_transform",3902764048,4,axis[2])
+    end
+    for _,field in ipairs({{"qx",24},{"qy",28},{"qz",32},{"qw",36},{"sy",44}}) do
+        b.alias("fire_ground_"..field[1],"fire_ground_visual_transform",3902764048,4,field[2])
+    end
+    b.float("fire_one",1)
+    -- Existing client-known, visual-only, non-saving bonfire. No template edits.
+    local template=api.resource("d0d55bba-7951-4213-8c2d-f8efb416fa2a","keen::ecs::TemplateResource")
+    local allowed={CurrentTransform=true,DoNotSave=true,RenderTransform=true,SpawnTime=true,
+        StaticTransform=true,VfxComponent=true,VfxComponentResource=true}
+    local no_save=false;local visual=false
+    for _,c in ipairs(template.components) do
+        if not allowed[c.type:match("([^:]+)$")] then api.fail("Ground fire: unexpected bonfire component "..c.type) end
+        if c.type=="keen::ecs::DoNotSave" then no_save=true end
+        if c.type=="keen::ecs::VfxComponentResource" then visual=c.value.vfx=="029761cb-618a-497b-b6af-5993c378f4a1" end
+    end
+    if not no_save or not visual or template.omitTransformReplication then api.fail("Ground fire: unsupported bonfire visual") end
+    b.add("fire_ground_template",709155311,string.pack("<I4I2I2",0xd0d55bba,0x7951,0x4213)..string.char(0x8c,0x2d,0xf8,0xef,0xb4,0x16,0xfa,0x2a),4)
     -- Immutable dispatch thresholds live outside the shared writable arena.
     for i=0,math.floor(65535/66) do b.add("fire_index_"..i,848563180,string.pack("<I4",i),4) end
     for _,field in ipairs(fields) do b.uint("fire_r_"..field,0) end
@@ -90,6 +126,8 @@ function M.prepare(b,profiles,api)
             strength=s.burn_damage_multiplier_per_second,chance=s.chance_percent/100}
         for _,key in ipairs({"duration","tick","delay","fanout","limit"}) do b.uint(p..key,values[key]) end
         for _,key in ipairs({"initial_radius","radius","strength","chance"}) do b.float(p..key,values[key]) end
+        b.uint(p.."ground_duration",s.ground_fire_enabled and s.initial_radius>0 and s.ground_fire_duration_ms or 0)
+        b.float(p.."ground_scale",s.initial_radius*s.ground_fire_visual_scale)
     end
 end
 function M.emit(b,profiles,api)
@@ -112,7 +150,7 @@ function M.emit(b,profiles,api)
         b.mark(a.key.."_fire_start")
         b.load("eligible");branch(10,"finish")
         if a.config.chance_percent<100 then b.call("RandomBranchNode",{a.key.."_fire_chance"});branch(10,"finish") end
-        for _,field in ipairs({"duration","tick","delay","fanout","limit","initial_radius","radius","strength"}) do
+        for _,field in ipairs({"duration","tick","delay","fanout","limit","initial_radius","radius","strength","ground_duration","ground_scale"}) do
             set(a.key.."_fire_"..field,"fire_"..field)
         end
         branch(8,"start")
@@ -124,6 +162,19 @@ function M.emit(b,profiles,api)
     -- by ApplyDamage, so do NOT multiply the three All Fire attributes manually.
     set("Damage.Magical_Fire::value","fire_base_fire")
     b.emit(25);b.save("fire_now")
+    set("fire_now","fire_ground_clock");set("fire_ground_duration","fire_ground_remaining")
+    b.copy("origin","fire_ground_origin")
+    b.load("fire_ground_remaining");branch(10,"ground_spawned")
+    b.load("fire_ground_scale");branch(10,"ground_spawned")
+    b.copy("fire_ground_origin","fire_ground_visual_transform")
+    -- Keep flames upright and their height independent of enemy size/radius.
+    for _,field in ipairs({"qx","qy","qz"}) do b.zero("fire_ground_"..field) end
+    set("fire_one","fire_ground_qw");set("fire_one","fire_ground_sy")
+    set("fire_ground_scale","fire_ground_scale_x");set("fire_ground_scale","fire_ground_scale_z")
+    b.done("GetSelf",{"fire_ground_owner"})
+    b.done("SpawnEntity",{false,false,false,"fire_ground_owner",false,false,"fire_ground_visual_transform",
+        "fire_ground_template","false","false","true","true","fire_ground_entity"})
+    mark("ground_spawned")
     set("fire_initial_value","best_value");b.zero("fire_secondary")
     living("best","initial_area")
     branch(8,"ignite")
@@ -162,7 +213,9 @@ function M.emit(b,profiles,api)
     b.done("GetTransform",{"fire_target","position",false})
     -- Repeated ticks bypass hit-history suppression, cannot crit or push/stagger,
     -- consume no mana/stamina, and never enter the ignition selection path.
-    b.done("ApplyDamage",{false,"true",false,false,"false","false",false,
+    -- Native ignoreConsecutiveHits=true SKIPS entities already hit. False is
+    -- required for DoT, including the original victim of the arrow's direct hit.
+    b.done("ApplyDamage",{false,"false",false,false,"false","false",false,
         "material::valueId","WeaponCategory::value","AttackCategory::value","fire_damage",
         "fire_no_reaction","fire_no_push","DamageScaleAttribute::value",false,false,false,false,
         "mul2::result","HitDirection::value","ForEach::normal","position","fire_target","GetRoot::entityId",false})
@@ -195,6 +248,20 @@ function M.emit(b,profiles,api)
     mark("record_next")
     b.inc("fire_cursor");branch(8,"next_record")
     mark("frame_done")
+    b.load("fire_ground_remaining");branch(10,"ground_done")
+    b.load("fire_now");b.load("fire_ground_clock");b.emit(2);b.save("fire_ground_dt")
+    set("fire_now","fire_ground_clock")
+    b.uless("fire_ground_dt","fire_ground_remaining");branch(9,"ground_active")
+    b.zero("fire_ground_remaining")
+    b.load("fire_ground_entity_value");branch(10,"ground_done")
+    b.done("DestroyEntity",{"fire_ground_entity"});b.zero("fire_ground_entity_value")
+    branch(8,"ground_done")
+    mark("ground_active")
+    b.load("fire_ground_remaining");b.load("fire_ground_dt");b.emit(2);b.save("fire_ground_remaining")
+    b.copy("fire_ground_origin","origin")
+    b.zero("fire_radius_mode");set("fire_initial_radius","fire_query_radius")
+    b.zero("fire_children");branch(8,"select")
+    mark("ground_done")
     b.load("fire_any_work");branch(9,"frame")
     b.equal("fire_count","fire_batch");branch(10,"frame")
     branch(8,"finish")
@@ -265,9 +332,15 @@ function M.emit(b,profiles,api)
     branch(8,"frame")
     mark("finish")
     b.done("DestroyFactionQuery",qa,qid)
+    b.load("fire_ground_entity_value");branch(10,"cleaned")
+    b.done("DestroyEntity",{"fire_ground_entity"});b.zero("fire_ground_entity_value")
+    mark("cleaned")
     -- Submit the final partial tick before retiring the projectile controller.
     b.emit(28,8,191)
-    local saved=b.code;b.code=b.shutdown;b.done("DestroyFactionQuery",qa,qid);b.code=saved
+    local saved=b.code;b.code=b.shutdown;b.done("DestroyFactionQuery",qa,qid)
+    -- Shutdown also covers early cancellation. Skip an absent/already retired visual.
+    b.load("fire_ground_entity_value");b.emit(10,#b.code+8)
+    b.done("DestroyEntity",{"fire_ground_entity"});b.code=saved
 
     -- Two exact scalar dispatches cost 66*N-14 words. The ledger overlays the
     -- shock frontier because a projectile can execute only one ammunition path.
