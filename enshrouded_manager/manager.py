@@ -27,11 +27,11 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
 
-APP_VERSION = "0.9.6.6a"
+APP_VERSION = "0.9.6.6b"
 UPDATE_RESTART_PROTOCOL = 1
 UPDATE_LOG = [
     {
-        "version": "0.9.6.6a",
+        "version": "0.9.6.6b",
         "date": "2026-11-06",
         "changes": [
             "Added upstream EML release checks, verified tool installation, source/license retention and rollback in Mods (EML).",
