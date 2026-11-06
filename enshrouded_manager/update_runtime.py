@@ -1,5 +1,7 @@
 """Independent manager update runner. Copied into data before the manager exits."""
 import ctypes
+import errno
+import hmac
 import json
 import os
 from pathlib import Path
@@ -14,6 +16,55 @@ import urllib.request
 ACTIVE_PHASES = {"waiting", "downloading", "verifying", "preparing", "restarting", "rolling_back"}
 
 
+class AlreadyRunning(RuntimeError):
+    pass
+
+
+class FileLease:
+    """An OS-held lock, released on process exit without stale-PID guessing."""
+    def __init__(self, path):
+        self.path = Path(path)
+        self.fd = None
+
+    def acquire(self):
+        if self.fd is not None:
+            return self
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as error:
+            os.close(descriptor)
+            if error.errno in {errno.EACCES, errno.EAGAIN, errno.EDEADLK}:
+                raise AlreadyRunning("Another process holds the manager lock") from error
+            raise
+        self.fd = descriptor
+        return self
+
+    def close(self):
+        if self.fd is not None:
+            os.close(self.fd)
+            self.fd = None
+
+    def __enter__(self):
+        return self.acquire()
+
+    def __exit__(self, *args):
+        self.close()
+
+
+def startup_gate(data, token=""):
+    expected = read_json(Path(data) / "manager_updates" / "handoff.json").get("token", "")
+    if token and isinstance(expected, str) and hmac.compare_digest(token, expected):
+        return None  # Only the helper-launched successor may cross its held gate.
+    return FileLease(Path(data) / "manager-update.lock").acquire()
+
+
 def read_json(path, default=None):
     try:
         return json.loads(Path(path).read_text(encoding="utf-8"))
@@ -21,16 +72,26 @@ def read_json(path, default=None):
         return {} if default is None else default
 
 
-def atomic_json(path, value):
+def atomic_json(path, value, *, indent=None):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + "." + secrets.token_hex(8) + ".tmp")
     try:
         with os.fdopen(os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w", encoding="utf-8") as stream:
-            json.dump(value, stream)
+            json.dump(value, stream, indent=indent)
+            stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temporary, path)
+        # Windows readers/antivirus may briefly deny rename while holding the
+        # destination. Retry the atomic operation; never delete/truncate it.
+        for attempt in range(20):
+            try:
+                os.replace(temporary, path)
+                break
+            except PermissionError as error:
+                if getattr(error, "winerror", None) not in {5, 32, 33} or attempt == 19:
+                    raise
+                time.sleep(0.05)
     finally:
         temporary.unlink(missing_ok=True)
 
@@ -96,6 +157,8 @@ def parent_exited(pid, timeout=45):
 
 def launch(plan):
     environment = dict(os.environ, ESM_UPDATE_RESTART="1")
+    if plan.get("handoff_token"):
+        environment["ESM_UPDATE_HANDOFF"] = plan["handoff_token"]
     options = {"cwd": plan["root"], "stdin": subprocess.DEVNULL, "env": environment}
     if os.name == "nt":
         options["creationflags"] = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
@@ -121,6 +184,26 @@ def healthy(plan, process, version):
 
 
 def run(plan):
+    app = Path(plan["app"]).resolve()
+    job = Path(plan["job"]).resolve()
+    if not job.is_relative_to(app / "data" / "manager_updates"):
+        raise ValueError("Update job is outside manager data")
+    handoff = app / "data" / "manager_updates" / "handoff.json"
+    try:
+        gate = FileLease(app / "data" / "manager-update.lock").acquire()
+    except AlreadyRunning:
+        set_status(plan["status"], "error", "Another manager startup or update is in progress; files were not replaced.")
+        return
+    try:
+        plan = dict(plan, handoff_token=secrets.token_hex(32))
+        atomic_json(handoff, {"token": plan["handoff_token"], "helper_pid": os.getpid()})
+        _run(plan)
+    finally:
+        handoff.unlink(missing_ok=True)
+        gate.close()
+
+
+def _run(plan):
     status = Path(plan["status"])
     app = Path(plan["app"]).resolve()
     data = app / "data"

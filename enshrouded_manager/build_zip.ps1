@@ -14,6 +14,7 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot "static") -Destination (Join-Pat
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "manager.py") -Destination (Join-Path $Stage "enshrouded_manager")
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "update_runtime.py") -Destination (Join-Path $Stage "enshrouded_manager")
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "log_downloads.py") -Destination (Join-Path $Stage "enshrouded_manager")
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot "eml_updates.py") -Destination (Join-Path $Stage "enshrouded_manager")
 if (Test-Path -LiteralPath (Join-Path $PSScriptRoot "eml_support.py")) {
     $Emm = Join-Path $PSScriptRoot "vendor\eml-v0.2.0\emm.exe"
     if (-not (Test-Path -LiteralPath $Emm)) { throw "Prepare EML first with python build_eml_vendor.py" }

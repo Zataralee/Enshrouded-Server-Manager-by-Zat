@@ -1,5 +1,6 @@
 import base64
 import datetime as dt
+import atexit
 import ftplib
 import hashlib
 import hmac
@@ -26,9 +27,21 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
 
-APP_VERSION = "0.9.6.5a"
+APP_VERSION = "0.9.6.6a"
 UPDATE_RESTART_PROTOCOL = 1
 UPDATE_LOG = [
+    {
+        "version": "0.9.6.6a",
+        "date": "2026-11-06",
+        "changes": [
+            "Added upstream EML release checks, verified tool installation, source/license retention and rollback in Mods (EML).",
+            "Kept EML tool updates separate from mod package and game-revision compatibility.",
+            "Prevented duplicate managers before configuration is read and protected the complete update handoff.",
+            "Saved configuration through unique temporary files and atomic replacement to prevent overlapping-write corruption.",
+            "Reserved the Windows listen address exclusively and explained background update restarts on repeated launches.",
+            "Showed unsupported game-revision errors directly in the mod status after a failed patch.",
+        ],
+    },
     {
         "version": "0.9.6.5a",
         "date": "2026-11-06",
@@ -290,6 +303,7 @@ sys.path.insert(0, str(APP_DIR))
 from eml_support import EML, MAX_UPLOAD
 import update_runtime
 import log_downloads
+import eml_updates
 BUNDLED_VENDOR_DIR = Path(getattr(sys, "_MEIPASS", APP_DIR)) / "vendor"
 DATA_DIR = APP_DIR / "data"
 MANAGER_CONFIG = DATA_DIR / "manager_config.json"
@@ -649,12 +663,7 @@ def load_json(path, fallback):
 
 
 def save_json(path, data):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    with tmp.open("w", encoding="utf-8") as fh:
-        json.dump(data, fh, indent="\t")
-        fh.write("\n")
-    tmp.replace(path)
+    update_runtime.atomic_json(path, data, indent="\t")
 
 
 def hash_password(password, salt):
@@ -958,6 +967,7 @@ MAINTENANCE = threading.Event()
 OPERATIONS = threading.Condition()
 ACTIVE_OPERATIONS = 0
 HTTP_SERVER = None
+EML_UPDATE_STOP = threading.Event()
 BOOT_ID = secrets.token_hex(16)
 
 
@@ -3062,8 +3072,22 @@ def validate_eml_update_target(extracted_manager):
 
 def eml_for_instance(instance_id):
     inst = get_instance(instance_id)
+    selected = eml_updater().descriptor()
     return EML(instance_path(inst["id"]), DATA_DIR / "eml" / inst["id"],
-               BUNDLED_VENDOR_DIR / "eml-v0.2.0" / "emm.exe")
+               selected["tool"], version=selected["version"], expected_sha256=selected["sha256"])
+
+
+def eml_updater():
+    return eml_updates.Updater(DATA_DIR, BUNDLED_VENDOR_DIR)
+
+
+def eml_update_loop():
+    while not EML_UPDATE_STOP.is_set():
+        try:
+            eml_updater().check()
+        except Exception as error:
+            write_log(f"EML update check failed: {error}")
+        EML_UPDATE_STOP.wait(eml_updates.CHECK_INTERVAL)
 
 
 def run_update(instance_id=None, status=None):
@@ -3810,6 +3834,10 @@ class Handler(SimpleHTTPRequestHandler):
             if route.path not in {"/api/auth/state"} and not self.require_auth():
                 return
             try:
+                if route.path == "/api/eml/updates":
+                    if not self.require_admin():
+                        return
+                    return self.send_json(eml_updater().status())
                 if route.path in {"/api/mods", "/api/mods/config", "/api/mods/log"}:
                     if not self.require_admin():
                         return
@@ -3908,9 +3936,30 @@ class Handler(SimpleHTTPRequestHandler):
     def handle_post(self):
         route = urlparse(self.path).path
         origin = self.headers.get("Origin")
-        if route in {"/api/manager/install-update", "/api/manager/check-update"} and origin and urlparse(origin).netloc != self.headers.get("Host"):
+        if (route in {"/api/manager/install-update", "/api/manager/check-update"} or route.startswith("/api/eml/")) and origin and urlparse(origin).netloc != self.headers.get("Host"):
             return self.send_json({"error": "Cross-origin updates are not permitted"}, 403)
         try:
+            if route.startswith("/api/eml/"):
+                if not self.require_admin():
+                    return
+                if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
+                    raise ValueError("Expected application/json")
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= 4096:
+                    raise ValueError("Missing or oversized EML update request")
+                body = self.json_body()
+                updater = eml_updater()
+                if route == "/api/eml/check-update":
+                    result = updater.check(force=True)
+                elif route == "/api/eml/install-update":
+                    result = updater.install(body.get("version", ""))
+                    write_log(f"Installed upstream EML {result['installed_version']}; applies to subsequent mod operations")
+                elif route == "/api/eml/rollback":
+                    result = updater.rollback()
+                    write_log(f"Rolled back upstream EML to {result['installed_version']}")
+                else:
+                    return self.send_json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
+                return self.send_json(result)
             if route.startswith("/api/mods/"):
                 if not self.require_admin():
                     return
@@ -4267,19 +4316,61 @@ def scheduled_restart_check(instance_id):
         sup.restart(update_first=inst.get("update_before_start", False))
 
 
+class ManagerHTTPServer(ThreadingHTTPServer):
+    allow_reuse_address = os.name != "nt"
+
+    def server_bind(self):
+        if os.name == "nt":
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 def main():
-    global HTTP_SERVER
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        gate = update_runtime.startup_gate(DATA_DIR, os.environ.get("ESM_UPDATE_HANDOFF", ""))
+    except update_runtime.AlreadyRunning:
+        print("ESM-Z is updating or starting. Reconnect in your browser; this launch will not start a second manager.", flush=True)
+        return
+    try:
+        lease = update_runtime.FileLease(DATA_DIR / "manager.lock").acquire()
+    except update_runtime.AlreadyRunning:
+        if gate:
+            gate.close()
+        info = update_runtime.read_json(DATA_DIR / "manager-instance.json")
+        print(f"ESM-Z is already running or starting. Open {info.get('url', 'the existing manager in your browser')}. Updates restart ESM-Z in the background.", flush=True)
+        return
+    except BaseException:
+        if gate:
+            gate.close()
+        raise
+    # Keep ownership until the PROCESS exits, even if another thread lingers.
+    atexit.register(lease.close)
+    try:
+        _serve_manager(gate)
+    finally:
+        if gate:
+            gate.close()
+        EML_UPDATE_STOP.set()
+        MAINTENANCE.set()
+
+
+def _serve_manager(gate):
+    global HTTP_SERVER
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
     cfg = config()
+    host = cfg.get("bind_host", "0.0.0.0")
+    port = int(cfg.get("port", 8080))
+    HTTP_SERVER = ManagerHTTPServer((host, port), Handler)
+    display_host = "127.0.0.1" if host == "0.0.0.0" else host
+    update_runtime.atomic_json(DATA_DIR / "manager-instance.json", {"pid": os.getpid(), "url": f"http://{display_host}:{port}"})
+    if gate:
+        gate.close()
+    write_log(f"ESM-Z manager pid={os.getpid()} listening on http://{host}:{port}")
     for inst in cfg.get("instances", []):
         if inst.get("start_on_manager_launch", False) and not os.environ.get("ESM_UPDATE_RESTART"):
             supervisor(inst["id"]).intentional_stop = False
             update_instance_metadata(inst["id"], desired_running=True)
-    host = cfg.get("bind_host", "0.0.0.0")
-    port = int(cfg.get("port", 8080))
-    write_log(f"ESM-Z UI listening on http://{host}:{port}")
-    HTTP_SERVER = ThreadingHTTPServer((host, port), Handler)
     if os.environ.get("ESM_UPDATE_RESTART"):
         MAINTENANCE.set()
 
@@ -4300,9 +4391,11 @@ def main():
 
         threading.Thread(target=finish_handoff, daemon=True).start()
     threading.Thread(target=monitor_loop, daemon=True).start()
+    threading.Thread(target=eml_update_loop, daemon=True).start()
     try:
         HTTP_SERVER.serve_forever()
     finally:
+        EML_UPDATE_STOP.set()
         HTTP_SERVER.server_close()
 
 

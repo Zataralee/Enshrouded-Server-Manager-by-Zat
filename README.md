@@ -4,13 +4,13 @@
 
 The stable release supports Windows hosts. Experimental Linux support is available separately through the `v0.10.0-linux-alpha.7` prerelease and is not production-ready.
 
-Current stable release: **v0.9.6.5a**, including optional EML integration.
+Current stable release: **v0.9.6.6a**, including optional EML integration, upstream EML updates and duplicate-manager protection.
 
-Windows beta/upgrade bridge: **v0.9.6.5b**. EML no longer requires beta. Existing beta users can use the [channel-switch instructions](docs/BETA_CHANNEL.md) to move to stable with their mods preserved.
+Windows beta: **v0.9.6.6b**. EML no longer requires beta. Existing beta users can use the [channel-switch instructions](docs/BETA_CHANNEL.md) to move to stable with their mods preserved.
 
 Experimental Linux prerelease: **v0.10.0-linux-alpha.7**
 
-Shareable package: [`release/ESM-Z-PythonRequired-v0.9.6.5a.zip`](release/ESM-Z-PythonRequired-v0.9.6.5a.zip)
+Shareable package: [`release/ESM-Z-PythonRequired-v0.9.6.6a.zip`](release/ESM-Z-PythonRequired-v0.9.6.6a.zip)
 
 ![ESM-Z dashboard](docs/screenshots/dashboard.png)
 
@@ -20,6 +20,8 @@ Shareable package: [`release/ESM-Z-PythonRequired-v0.9.6.5a.zip`](release/ESM-Z-
 - Starts, stops, restarts, and update-checks Enshrouded dedicated servers.
 - Manages multiple server instances from one manager UI.
 - Includes optional Enshrouded Mod Loader (EML) support for self-contained EML-compatible Lua patch mods. See [EML mod requirements](docs/EML_MODS.md).
+- Checks upstream EML releases and supports verified tool installation and rollback. See [EML updates](docs/EML_UPDATES.md).
+- Prevents duplicate manager launches and protects automatic update restarts. See [manager lifecycle](docs/MANAGER_LIFECYCLE.md).
 - Installs SteamCMD and fresh Enshrouded dedicated server instances when needed.
 - Adds existing dedicated server installs when you already know the folder path.
 - Monitors server state and can restart crashed servers unless they were intentionally stopped.

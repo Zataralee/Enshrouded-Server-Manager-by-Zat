@@ -66,10 +66,12 @@ def validate_manifest(value):
 
 
 class EML:
-    def __init__(self, server, storage, tool):
+    def __init__(self, server, storage, tool, version=EML_VERSION, expected_sha256=EML_SHA256):
         self.server = Path(server).resolve()
         self.storage = Path(storage)
         self.tool = Path(tool)
+        self.version = version
+        self.expected_sha256 = expected_sha256
         self.state_path = self.storage / "state.json"
         self.kfc = self.server / "enshrouded_server.kfc"
         self.exe = self.server / "enshrouded_server.exe"
@@ -89,15 +91,15 @@ class EML:
 
     def status(self):
         state = self.state()
-        return {"version": EML_VERSION, "installed": self.tool.is_file(), "enabled": state["enabled"],
+        return {"version": self.version, "installed": self.tool.is_file(), "enabled": state["enabled"],
                 "patched": state.get("patched", False), "recovery_required": state.get("recovery_required", False),
                 "log_available": self.log_path.is_file(),
                 "last_error": state.get("last_error", ""), "last_applied": state.get("last_applied", ""),
                 "mods": list(state["mods"].values())}
 
     def check_tool(self):
-        if not self.tool.is_file() or digest(self.tool) != EML_SHA256:
-            raise RuntimeError("The bundled upstream EML tool is missing or failed SHA-256 verification. Reinstall the ESM-Z package.")
+        if not re.fullmatch(r"[0-9a-f]{64}", self.expected_sha256) or not self.tool.is_file() or digest(self.tool) != self.expected_sha256:
+            raise RuntimeError("The selected upstream EML tool is missing or failed SHA-256 verification. Roll back EML or reinstall the ESM-Z package.")
 
     def check_server(self):
         if not self.exe.is_file() or not self.kfc.is_file():
@@ -124,12 +126,18 @@ class EML:
         with self.log_path.open("ab") as log:
             log.write(("\nESM-Z: emm " + " ".join(arguments) + "\n").encode())
             log.flush()
+            run_start = log.tell()
             result = subprocess.run([str(self.tool), *arguments, "-g", str(self.server),
                                      "--file-name", "enshrouded_server"], cwd=self.server,
                                     stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
                                     timeout=300, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         if result.returncode:
-            raise RuntimeError(f"EML exited with code {result.returncode}. See the EML log.")
+            with self.log_path.open("rb") as log:
+                log.seek(max(run_start, self.log_path.stat().st_size - 16000))
+                tail = log.read().decode("utf-8", errors="replace")
+            error_line = next((line for line in reversed(tail.splitlines()) if "Unsupported game revision" in line), "")
+            detail = " " + error_line[:700] if error_line else " See the EML log."
+            raise RuntimeError(f"EML exited with code {result.returncode}.{detail}")
         # Some upstream CLI validation errors return exit code zero.
         lines = self.log_path.read_text(encoding="utf-8", errors="replace").split("ESM-Z: emm ")[-1]
         if re.search(r"\bERROR\b", lines):

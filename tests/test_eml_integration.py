@@ -55,6 +55,23 @@ class EMLTests(unittest.TestCase):
         self.eml.kfc.with_suffix(".kfc.bak").write_bytes(b"original index")
         self.eml.kfc.write_bytes(b"patched index")
 
+    def test_failed_command_reports_current_revision_error_not_an_older_run(self):
+        self.eml.log_path.parent.mkdir(parents=True)
+        self.eml.log_path.write_text("Unsupported game revision OLD\n")
+        def failed(*args, **kwargs):
+            kwargs['stdout'].write(b"An unrelated current failure\n")
+            return mock.Mock(returncode=1)
+        with mock.patch('eml_support.subprocess.run', side_effect=failed):
+            with self.assertRaises(RuntimeError) as caught:
+                self.eml.command(['run', '--patch'])
+        self.assertNotIn('Unsupported game revision', str(caught.exception))
+        def revision_failure(*args, **kwargs):
+            kwargs['stdout'].write(b"Unsupported game revision CURRENT\n")
+            return mock.Mock(returncode=1)
+        with mock.patch('eml_support.subprocess.run', side_effect=revision_failure):
+            with self.assertRaisesRegex(RuntimeError, 'Unsupported game revision CURRENT'):
+                self.eml.command(['run', '--patch'])
+
     def test_import_accepts_normal_and_unwrapped_mods(self):
         for prefix in ("example/", "", "mods/example/"):
             with self.subTest(prefix=prefix):

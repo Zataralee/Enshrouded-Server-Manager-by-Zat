@@ -108,6 +108,18 @@
     <section id="mods" class="tab">
       <div class="panel">
         <h2>Enshrouded Mod Loader (EML)</h2>
+        <div class="panel" id="emlUpdates">
+          <h3>EML Updates</h3>
+          <p id="emlUpdateStatus" role="status">Checking installed EML version…</p>
+          <div class="actions">
+            <button id="emlCheckUpdate" type="button">Check for EML Updates</button>
+            <button id="emlInstallUpdate" type="button" disabled>Install EML Update</button>
+            <button id="emlRollback" type="button" disabled>Roll Back EML</button>
+            <a id="emlReleaseNotes" href="https://github.com/Brabb3l/kfc-parser/releases" target="_blank" rel="noopener noreferrer">EML Release Notes</a>
+          </div>
+          <p>Checks upstream stable releases every six hours. Installation is an administrator action and retains the previous tool for rollback. Running servers are unaffected; the selected EML tool is used for subsequent mod operations.</p>
+          <p><strong>Mod compatibility is separate.</strong> Each mod must support your game revision. Updating EML does not update mod packages or remove their compatibility checks.</p>
+        </div>
         <p><strong>EML-compatible mods only.</strong> Upload a self-contained EML Lua patch mod ZIP containing <code>mod.json</code> and <code>src/mod.lua</code>.</p>
         <p>EML 0.2.0 is included in the stable release. Enable EML for the selected server, upload an EML patch mod, then enable the mod. Patches are applied before server start.</p>
         <p>Only install mods you trust. Multiplayer requirements vary: players may need EML and matching mods on their own computers.</p>
@@ -469,5 +481,6 @@
   <script src="/logs.js?v=20261106-downloads"></script>
   <script src="/app.js?v=20261106-eml-stable"></script>
   <script src="/mods.js?v=20261106-eml-stable"></script>
+  <script src="/eml-updates.js?v=20261106-eml-updates"></script>
 </body>
 </html>

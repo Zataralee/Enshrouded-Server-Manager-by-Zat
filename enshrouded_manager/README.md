@@ -14,6 +14,9 @@ On first load, the manager checks for configured Enshrouded server instances. If
 
 Included features:
 
+- Upstream EML release checks with verified administrator installation and rollback; see `docs/EML_UPDATES.md` in the release package.
+- Duplicate-manager protection and automatic update handoff; see `docs/MANAGER_LIFECYCLE.md`.
+
 - Start, stop, restart, and update-check the Enshrouded dedicated server.
 - Manage multiple Enshrouded dedicated server instances from one UI.
 - Review manager version history and update notes from the Updates tab.

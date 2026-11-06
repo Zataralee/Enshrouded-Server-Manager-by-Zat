@@ -2,6 +2,14 @@
 
 ## Current Release
 
+**v0.9.6.6a stable / v0.9.6.6b beta** - 2026-11-06
+
+- Added six-hour upstream EML release checks and administrator check/install/rollback controls. Verified installations preserve the old tool, source/license and mod configurations. Running game servers are unaffected. See [EML Updates](EML_UPDATES.md).
+- Distinguished EML tool updates from game-revision compatibility of individual mods. Unsupported-revision failures now show the specific error in the mod status.
+- Added a manager lifetime lock before configuration loading, exclusive Windows HTTP binding and a helper-held gate through update replacement and health checks. Repeated shortcut launches explain background restarts and exit without a second manager. See [Manager Lifecycle](MANAGER_LIFECYCLE.md).
+
+### Previous release
+
 **v0.9.6.5a stable / v0.9.6.5b upgrade bridge** - 2026-11-06
 
 - Promoted optional EML integration into the full Windows stable release. Fresh stable installs follow the stable channel and keep EML disabled until an administrator enables it for a stopped server.
