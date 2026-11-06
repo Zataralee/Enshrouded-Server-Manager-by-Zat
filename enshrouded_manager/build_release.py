@@ -11,7 +11,7 @@ def build():
     app = Path(__file__).resolve().parent
     root = app.parent
     version = re.search(r'^APP_VERSION = "([^"]+)"', (app / "manager.py").read_text(), re.M)[1]
-    if version.endswith("b"):
+    if (app / "eml_support.py").is_file():
         from build_eml_vendor import prepare
         prepare()
     output = root / "dist" / "versions"
@@ -26,7 +26,7 @@ def build():
         for name in ("README.md", "USER_README.md"):
             shutil.copy2(app / name, target / name)
         shutil.copytree(app / "static", target / "static")
-        if version.endswith("b") and (app / "vendor").exists():
+        if (app / "vendor").exists():
             shutil.copytree(app / "vendor", target / "vendor")
         shutil.copytree(root / "docs", stage / "docs", ignore=shutil.ignore_patterns("MODDING_VIABILITY_*.md"))
         shutil.copy2(root / "README.md", stage / "PROJECT_README.md")

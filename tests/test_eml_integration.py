@@ -240,6 +240,12 @@ class ModHTTPTests(unittest.TestCase):
         self.assertEqual(403, raised.exception.code)
         self.eml.import_zip.assert_not_called()
 
+    def test_truncated_eml_preview_is_replaced_by_log_downloads(self):
+        with self.assertRaises(urllib.error.HTTPError) as raised:
+            urllib.request.urlopen(f"http://127.0.0.1:{self.server.server_port}/api/mods/log?instance_id={self.instance['id']}")
+        self.assertEqual(410, raised.exception.code)
+        self.eml.log.assert_not_called()
+
     def test_failed_patch_prevents_server_launch_and_restart_loop(self):
         server = Path(self.instance["path"])
         server.mkdir()

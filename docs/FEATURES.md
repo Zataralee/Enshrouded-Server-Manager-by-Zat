@@ -74,6 +74,8 @@
 
 ## Logs And Instructions
 
+- Optional EML integration is included in stable. Administrators can install self-contained EML-compatible Lua patch ZIPs through Mods (EML), edit mod configuration and download full EML logs. See [EML Mods](EML_MODS.md).
+
 - Download complete server logs and archives to the computer using the browser; administrators can also download manager and updater logs. Search and explicitly refresh the file list. See [Log Downloads](LOG_DOWNLOADS.md).
 - Read role-aware instructions inside the Instructions tab.
 - Read the manager update history inside the Updates tab.

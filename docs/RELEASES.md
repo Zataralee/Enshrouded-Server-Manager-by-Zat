@@ -2,6 +2,17 @@
 
 ## Current Release
 
+**v0.9.6.5a stable / v0.9.6.5b upgrade bridge** - 2026-11-06
+
+- Promoted optional EML integration into the full Windows stable release. Fresh stable installs follow the stable channel and keep EML disabled until an administrator enables it for a stopped server.
+- Renamed the mod interface to Mods (EML), explicitly requiring self-contained EML-compatible Lua patch mod ZIPs. Unsupported loaders, native binaries, runtime/export mods and dependency packages remain rejected.
+- Preserved current EML mod packages, edited configurations, state and original indexes during updates. The updater checks the verified target package for EML support instead of assuming all stable packages lack it.
+- Published 0.9.6.5b as an upgrade bridge: older beta users install it first, then switch to 0.9.6.5a without disabling active EML. See [channel switching](BETA_CHANNEL.md).
+- Replaced the Mods page's truncated EML log preview with a complete local file download. All log-download improvements from 0.9.6.4 remain included.
+- Bundled the unchanged upstream EML 0.2.0 binary, matching source archive and GPL-3.0 license in stable and beta packages. See [EML mod requirements](EML_MODS.md).
+
+### Previous release
+
 **v0.9.6.4a / v0.9.6.4b** - 2026-11-06
 
 - Replaced the log viewer with complete file downloads to the computer using the browser. Download a log, then open it locally.

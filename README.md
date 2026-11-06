@@ -4,13 +4,13 @@
 
 The stable release supports Windows hosts. Experimental Linux support is available separately through the `v0.10.0-linux-alpha.7` prerelease and is not production-ready.
 
-Current stable release: **v0.9.6.4a**
+Current stable release: **v0.9.6.5a**, including optional EML integration.
 
-Windows EML beta: **v0.9.6.4b** - see [beta channel instructions](docs/BETA_CHANNEL.md).
+Windows beta/upgrade bridge: **v0.9.6.5b**. EML no longer requires beta. Existing beta users can use the [channel-switch instructions](docs/BETA_CHANNEL.md) to move to stable with their mods preserved.
 
 Experimental Linux prerelease: **v0.10.0-linux-alpha.7**
 
-Shareable package: [`release/ESM-Z-PythonRequired-v0.9.6.4a.zip`](release/ESM-Z-PythonRequired-v0.9.6.4a.zip)
+Shareable package: [`release/ESM-Z-PythonRequired-v0.9.6.5a.zip`](release/ESM-Z-PythonRequired-v0.9.6.5a.zip)
 
 ![ESM-Z dashboard](docs/screenshots/dashboard.png)
 
@@ -19,6 +19,7 @@ Shareable package: [`release/ESM-Z-PythonRequired-v0.9.6.4a.zip`](release/ESM-Z-
 - Runs a web UI locally or over the network.
 - Starts, stops, restarts, and update-checks Enshrouded dedicated servers.
 - Manages multiple server instances from one manager UI.
+- Includes optional Enshrouded Mod Loader (EML) support for self-contained EML-compatible Lua patch mods. See [EML mod requirements](docs/EML_MODS.md).
 - Installs SteamCMD and fresh Enshrouded dedicated server instances when needed.
 - Adds existing dedicated server installs when you already know the folder path.
 - Monitors server state and can restart crashed servers unless they were intentionally stopped.
@@ -35,7 +36,7 @@ Shareable package: [`release/ESM-Z-PythonRequired-v0.9.6.4a.zip`](release/ESM-Z-
 
 Use the Python-required release if Python 3.11 or newer is already installed on the server.
 
-1. Download [`release/ESM-Z-PythonRequired-v0.9.6.4a.zip`](release/ESM-Z-PythonRequired-v0.9.6.4a.zip).
+1. Download [`release/ESM-Z-PythonRequired-v0.9.6.5a.zip`](release/ESM-Z-PythonRequired-v0.9.6.5a.zip).
 2. Extract it to the machine that will host the manager.
 3. Run `Run ESM-Z.bat`.
 4. Open `http://127.0.0.1:8080` on that machine.

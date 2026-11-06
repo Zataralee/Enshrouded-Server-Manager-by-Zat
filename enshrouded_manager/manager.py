@@ -26,9 +26,19 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
 
-APP_VERSION = "0.9.6.4b"
+APP_VERSION = "0.9.6.5a"
 UPDATE_RESTART_PROTOCOL = 1
 UPDATE_LOG = [
+    {
+        "version": "0.9.6.5a",
+        "date": "2026-11-06",
+        "changes": [
+            "Promoted optional EML integration to the full Windows stable release.",
+            "Labeled the Mods page and uploader for EML-compatible Lua patch ZIPs, with explicit compatibility guidance.",
+            "Preserved existing EML settings and mods when switching between EML-capable stable and beta releases.",
+            "EML logs now download as complete files through the scoped log download system.",
+        ],
+    },
     {
         "version": "0.9.6.4b",
         "date": "2026-11-06",
@@ -280,6 +290,7 @@ sys.path.insert(0, str(APP_DIR))
 from eml_support import EML, MAX_UPLOAD
 import update_runtime
 import log_downloads
+BUNDLED_VENDOR_DIR = Path(getattr(sys, "_MEIPASS", APP_DIR)) / "vendor"
 DATA_DIR = APP_DIR / "data"
 MANAGER_CONFIG = DATA_DIR / "manager_config.json"
 SERVER_CONFIG = SERVER_DIR / "enshrouded_server.json"
@@ -454,7 +465,7 @@ def default_manager_updates():
         "enabled": True,
         "repo": GITHUB_REPO,
         "interval_hours": 24,
-        "channel": "beta",
+        "channel": "beta" if APP_VERSION.endswith("b") else "stable",
         "github_token": "",
         "last_checked_at": "",
         "latest_version": "",
@@ -2743,11 +2754,6 @@ def install_manager_update():
     channel = str(updates.get("channel") or "auto").strip()
     release = latest_release_for_host(repo, token=token, channel=channel)
     release_version = str(release.get("tag_name") or "").lstrip("v")
-    if not release_version.endswith("b"):
-        for inst in instances():
-            mod_state = eml_for_instance(inst["id"]).status()
-            if mod_state["enabled"] or mod_state["patched"] or mod_state["recovery_required"]:
-                raise RuntimeError("Disable EML in the Mods tab on every instance before returning to a release without EML support.")
     if not (is_newer_version(release_version) or stable_channel_return(release_version, APP_VERSION, channel)):
         raise RuntimeError("The selected GitHub release is not newer than the running ESM-Z version")
     asset = find_release_asset(release)
@@ -2777,6 +2783,7 @@ def install_manager_update():
             raise RuntimeError(f"Update package version v{package_version} does not match release v{release_version}")
         if not (extracted_manager / "update_runtime.py").is_file():
             raise RuntimeError("This package predates remote restart support; install it manually instead")
+        validate_eml_update_target(extracted_manager)
         for source in extracted_manager.glob("*.py"):
             compile(source.read_text(encoding="utf-8"), str(source), "exec")
         update_status("preparing", "Backing up manager files before restart.")
@@ -3038,10 +3045,25 @@ def restore_instance_steam_manifests(moved):
             shutil.copy2(backup, manifest)
 
 
+def validate_eml_update_target(extracted_manager):
+    # Check the verified package's actual capabilities, not its channel suffix.
+    # Historical stable packages had no EML; new stable packages include it.
+    for inst in instances():
+        state = eml_for_instance(inst["id"]).status()
+        if state["enabled"] or state["patched"] or state["recovery_required"]:
+            tool = Path(extracted_manager) / "vendor" / "eml-v0.2.0" / "emm.exe"
+            if not (Path(extracted_manager) / "eml_support.py").is_file() or not tool.is_file():
+                raise RuntimeError("This release does not include EML. Disable EML on every instance before installing it.")
+            from eml_support import digest, EML_SHA256
+            if digest(tool) != EML_SHA256:
+                raise RuntimeError("The update package's EML tool failed SHA-256 verification")
+            break
+
+
 def eml_for_instance(instance_id):
     inst = get_instance(instance_id)
     return EML(instance_path(inst["id"]), DATA_DIR / "eml" / inst["id"],
-               APP_DIR / "vendor" / "eml-v0.2.0" / "emm.exe")
+               BUNDLED_VENDOR_DIR / "eml-v0.2.0" / "emm.exe")
 
 
 def run_update(instance_id=None, status=None):
@@ -3795,7 +3817,7 @@ class Handler(SimpleHTTPRequestHandler):
                     inst = get_instance_for_user(self.current_user(), qs.get("instance_id", [None])[0])
                     eml = eml_for_instance(inst["id"])
                     if route.path == "/api/mods/log":
-                        return self.send_json({"content": eml.log()})
+                        return self.send_json({"error": "Use Logs or Download EML Log to download the complete file."}, HTTPStatus.GONE)
                     if route.path == "/api/mods/config":
                         return self.send_json(eml.config_file(qs.get("mod_id", [""])[0], qs.get("file", [None])[0]))
                     return self.send_json(eml.status())

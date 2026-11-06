@@ -11,6 +11,11 @@
     element("emlApply").disabled = !stopped || !snapshot.enabled;
     element("modUploadButton").disabled = !stopped;
     element("modConfigSave").disabled = !stopped || editor?.instanceId !== selected;
+    const hasLog = selected && selected === selectedInstanceId() && snapshot.log_available;
+    element("emlLog").setAttribute("aria-disabled", String(!hasLog));
+    element("emlLog").classList.toggle("disabled", !hasLog);
+    if (hasLog) element("emlLog").setAttribute("href", `/api/logs/download?log_id=server%3Aesm-eml.log&${query(selected)}`);
+    else element("emlLog").removeAttribute("href");
     element("emlToggle").textContent = snapshot.enabled ? "Disable EML & Restore Game" : "Enable EML";
     element("modList").querySelectorAll("button").forEach(button => { button.disabled = !stopped; });
   }
@@ -73,15 +78,10 @@
     toast("EML patch completed. Check the log before starting the server.");
   }));
   element("emlRefresh").addEventListener("click", refreshMods);
-  element("emlLog").addEventListener("click", () => operation(async () => {
-    const result = await api(`/api/mods/log?${query(selected)}`);
-    element("emlLogText").textContent = result.content;
-    element("emlLogText").classList.remove("hidden");
-  }));
   element("modUploadForm").addEventListener("submit", event => {
     event.preventDefault();
     const file = element("modZip").files[0];
-    if (!file || !selected || file.size > 32 * 1024 * 1024) { toast("Select a server and a ZIP no larger than 32 MiB"); return; }
+    if (!file || !selected || file.size > 32 * 1024 * 1024) { toast("Select a server and an EML Lua patch ZIP no larger than 32 MiB"); return; }
     operation(async () => {
       await api(`/api/mods/upload?${query(selected)}`, { method: "POST", headers: { "Content-Type": "application/zip" }, body: file });
       element("modZip").value = "";

@@ -59,9 +59,9 @@ def validate_manifest(value):
     if not re.fullmatch(r"\d+\.\d+\.\d+(?:[-+][a-zA-Z0-9.+-]+)?", str(value.get("version", ""))):
         raise ValueError("mod.json needs a semantic version, such as 1.0.0")
     if value.get("capabilities") != ["patch"]:
-        raise ValueError("This beta supports upstream EML Lua patch mods only (capabilities: [\"patch\"])")
+        raise ValueError("Use an EML-compatible Lua patch mod (capabilities: [\"patch\"])")
     if value.get("dependencies"):
-        raise ValueError("Mod dependencies are not supported in this beta; install a self-contained patch mod")
+        raise ValueError("Mod dependencies are not supported; install a self-contained EML Lua patch mod")
     return value
 
 
@@ -91,19 +91,20 @@ class EML:
         state = self.state()
         return {"version": EML_VERSION, "installed": self.tool.is_file(), "enabled": state["enabled"],
                 "patched": state.get("patched", False), "recovery_required": state.get("recovery_required", False),
+                "log_available": self.log_path.is_file(),
                 "last_error": state.get("last_error", ""), "last_applied": state.get("last_applied", ""),
                 "mods": list(state["mods"].values())}
 
     def check_tool(self):
         if not self.tool.is_file() or digest(self.tool) != EML_SHA256:
-            raise RuntimeError("The bundled upstream EML tool is missing or failed SHA-256 verification. Reinstall the beta package.")
+            raise RuntimeError("The bundled upstream EML tool is missing or failed SHA-256 verification. Reinstall the ESM-Z package.")
 
     def check_server(self):
         if not self.exe.is_file() or not self.kfc.is_file():
             raise RuntimeError("Install the dedicated server before enabling EML")
         for name in ("dbghelp.dll", "dinput8.dll", "winmm.dll", "powrprof.dll"):
             if (self.server / name).exists():
-                raise RuntimeError(f"Existing {name} detected. Use a clean dedicated server for the EML beta.")
+                raise RuntimeError(f"Existing {name} detected. Use a clean dedicated server for EML.")
         contained(self.server, self.server / "mods")
         contained(self.server, self.server / ".cache")
         state = self.state()
@@ -260,7 +261,7 @@ class EML:
                     raise ValueError("Duplicate ZIP path")
                 names.add(key)
                 if path.suffix.lower() in {".dll", ".exe", ".bat", ".cmd", ".ps1", ".com", ".msi"}:
-                    raise ValueError("Native loaders and executable files are not accepted as Lua patch mods")
+                    raise ValueError("Use an EML Lua patch ZIP; native loaders and executable files are not supported")
             manifests = [item for item in items if PurePosixPath(item.filename).name == "mod.json" and not item.is_dir()]
             if len(manifests) != 1:
                 raise ValueError("Upload one EML mod per ZIP, containing exactly one mod.json")

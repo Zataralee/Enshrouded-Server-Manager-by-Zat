@@ -1,4 +1,4 @@
-"""Fetch the original EML release for beta packaging (never modifies the binary)."""
+"""Fetch the original EML release for packaging (never modifies the binary)."""
 import hashlib
 from pathlib import Path
 import urllib.request
