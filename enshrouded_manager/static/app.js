@@ -1213,6 +1213,7 @@ document.addEventListener("click", async event => {
     serverConfigDirty = false;
     accountsDirty = false;
     activeInstanceId = btn.dataset.selectInstance;
+    renderLogs();
     localStorage.setItem("esm_active_instance_id", activeInstanceId);
     toast("Instance selected");
     refresh();
@@ -1908,6 +1909,7 @@ document.querySelector("#instanceSelect").addEventListener("change", async event
   webhookDirty = false;
   editingWebhookId = "";
   activeInstanceId = event.target.value;
+  renderLogs();
   localStorage.setItem("esm_active_instance_id", activeInstanceId);
   refresh();
 });

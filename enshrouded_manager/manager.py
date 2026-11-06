@@ -26,9 +26,20 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
 
-APP_VERSION = "0.9.6.3b"
+APP_VERSION = "0.9.6.4b"
 UPDATE_RESTART_PROTOCOL = 1
 UPDATE_LOG = [
+    {
+        "version": "0.9.6.4b",
+        "date": "2026-11-06",
+        "changes": [
+            "Redesigned Logs around complete file downloads that open on the computer using the browser.",
+            "Added file sizes, modification dates, local search, explicit refresh, and server log archives.",
+            "Removed recursive log scans from routine status polling and retired the truncated preview endpoint.",
+            "Restricted downloads to approved logs for assigned servers; manager and updater logs require admin access.",
+            "Blocked configuration downloads, path traversal, links and Windows junctions; bounded memory use for large files.",
+        ],
+    },
     {
         "version": "0.9.6.3b",
         "date": "2026-10-21",
@@ -3690,8 +3701,11 @@ class Handler(SimpleHTTPRequestHandler):
         route = urlparse(path).path
         if route == "/":
             return str(STATIC_DIR / "index.html")
+        relative = unquote(route).lstrip("/")
+        if any(char in relative for char in "\\:\x00"):
+            return str(STATIC_DIR / "__not_found__")
         try:
-            return str(safe_child(STATIC_DIR, STATIC_DIR / unquote(route).lstrip("/")))
+            return str(safe_child(STATIC_DIR, STATIC_DIR / relative))
         except (ValueError, OSError):
             return str(STATIC_DIR / "__not_found__")
 
