@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ESM-Z</title>
-    <link rel="stylesheet" href="/styles.css?v=20261106-downloads">
+    <link rel="stylesheet" href="/styles.css?v=20261106-eml-stable">
 </head>
 <body>
   <div id="login" class="login hidden">
@@ -58,6 +58,7 @@
       <div class="sub-nav-group hidden" data-subnav="server">
         <button data-tab="setup" data-parent-section="server" data-permission="setup">Setup & Instances</button>
         <button data-tab="settings" data-parent-section="server" data-permission="settings">Server Config</button>
+        <button data-tab="mods" data-parent-section="server" data-admin-only="true">Mods (EML)</button>
         <button data-tab="accounts" data-parent-section="server" data-permission="accounts">Game Server Accounts</button>
         <button data-tab="saves" data-parent-section="server" data-permission="saves">Saves & Backups</button>
         <button data-tab="webhooks" data-parent-section="server" data-permission="settings">Webhooks</button>
@@ -102,6 +103,38 @@
           <div id="scheduleList" class="chips"></div>
         </div>
       </div>
+    </section>
+
+    <section id="mods" class="tab">
+      <div class="panel">
+        <h2>Enshrouded Mod Loader (EML)</h2>
+        <p><strong>EML-compatible mods only.</strong> Upload a self-contained EML Lua patch mod ZIP containing <code>mod.json</code> and <code>src/mod.lua</code>.</p>
+        <p>EML 0.2.0 is included in the stable release. Enable EML for the selected server, upload an EML patch mod, then enable the mod. Patches are applied before server start.</p>
+        <p>Only install mods you trust. Multiplayer requirements vary: players may need EML and matching mods on their own computers.</p>
+        <p><a href="https://www.nexusmods.com/games/enshrouded/mods" target="_blank" rel="noopener noreferrer">Find mods on Nexus Mods</a> · <a href="https://github.com/Brabb3l/kfc-parser/releases/tag/v0.2.0" target="_blank" rel="noopener noreferrer">Upstream EML release and source</a></p>
+        <p id="emlStatus" role="status">Select a server to manage mods.</p>
+        <div class="actions">
+          <button id="emlToggle" type="button" disabled>Enable EML</button>
+          <button id="emlApply" type="button" disabled>Apply &amp; Validate Mods</button>
+          <button id="emlRefresh" type="button">Refresh</button>
+          <a id="emlLog" class="log-download disabled" aria-disabled="true" download>Download EML Log</a>
+        </div>
+        <p class="form-note">Stop the server before changing mods. Disabling EML restores the original game index. Use Dashboard → Update Check to validate or repair game files after an interrupted patch or external game update.</p>
+        <form id="modUploadForm" class="inline">
+          <label>EML Lua patch mod ZIP from this computer <input id="modZip" type="file" accept=".zip,application/zip" required></label>
+          <button id="modUploadButton" type="submit" disabled>Upload EML Mod</button>
+        </form>
+        <p class="form-note">One EML Lua patch mod per ZIP, up to 32 MiB. Uploads start disabled. Native DLL mods and mods requiring another loader are not supported.</p>
+        <div id="modList" class="list"></div>
+      </div>
+      <div id="modEditor" class="panel hidden">
+        <h2 id="modEditorTitle">Mod configuration</h2>
+        <label>File <select id="modConfigFile"></select></label>
+        <textarea id="modConfigText" rows="18" spellcheck="false" style="width:100%"></textarea>
+        <div class="actions"><button id="modConfigSave" type="button">Save Configuration</button><button id="modConfigClose" type="button">Close</button></div>
+        <p class="form-note">Edits apply on the next patch/start. Lua syntax and compatibility are checked by EML when applying mods.</p>
+      </div>
+      <pre id="emlLogText" class="panel hidden" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
     </section>
 
     <section id="setup" class="tab">
@@ -434,6 +467,7 @@
     <button id="closeUpdateProgress" type="button" hidden>Close</button>
   </dialog>
   <script src="/logs.js?v=20261106-downloads"></script>
-  <script src="/app.js?v=20261106-downloads"></script>
+  <script src="/app.js?v=20261106-eml-stable"></script>
+  <script src="/mods.js?v=20261106-eml-stable"></script>
 </body>
 </html>

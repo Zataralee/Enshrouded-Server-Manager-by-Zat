@@ -1012,6 +1012,11 @@ function renderInstructions() {
     `));
   }
   if (isAdmin()) {
+    parts.push(instructionSection("EML Mods", `
+      <p>EML is included in the stable release. Open Server Setup &amp; Config &gt; Mods (EML) as an administrator and stop the selected server before changing mods.</p>
+      <p>Upload only self-contained EML-compatible Lua patch mod ZIPs containing mod.json and src/mod.lua. Check the author's EML, game-version and client/server requirements.</p>
+      <p>Enable EML, upload and enable the mod, then Apply &amp; Validate Mods. Download EML Log saves the complete patch log to this computer.</p>
+    `));
     parts.push(instructionSection("Manager", `
       <p>Admins can configure manager access, listen address, web UI port, storage roots, backup limits, crash restart behavior, launch behavior, and FTP backup settings.</p>
       <p>Admins can also limit how many servers each server owner may create and how long a server owner must wait between server creations.</p>

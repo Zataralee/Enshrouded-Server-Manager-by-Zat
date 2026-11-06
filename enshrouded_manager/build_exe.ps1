@@ -4,5 +4,6 @@ $Python = Join-Path $env:USERPROFILE ".cache\codex-runtimes\codex-primary-runtim
 if (-not (Test-Path $Python)) { $Python = "py" }
 & $Python -m PyInstaller --onefile --name esm-z `
   --add-data "$PSScriptRoot\static;static" `
+  --add-data "$PSScriptRoot\vendor;vendor" `
   "$PSScriptRoot\manager.py"
 Write-Host "ESM-Z EXE build complete. Copy dist\esm-z.exe beside the Enshrouded Dedicated Server and Steamcmd folders."

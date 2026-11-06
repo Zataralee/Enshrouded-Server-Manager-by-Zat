@@ -26,11 +26,21 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
 
-APP_VERSION = "0.9.6.4a"
+APP_VERSION = "0.9.6.5a"
 UPDATE_RESTART_PROTOCOL = 1
 UPDATE_LOG = [
     {
-        "version": "0.9.6.4a",
+        "version": "0.9.6.5a",
+        "date": "2026-11-06",
+        "changes": [
+            "Promoted optional EML integration to the full Windows stable release.",
+            "Labeled the Mods page and uploader for EML-compatible Lua patch ZIPs, with explicit compatibility guidance.",
+            "Preserved existing EML settings and mods when switching between EML-capable stable and beta releases.",
+            "EML logs now download as complete files through the scoped log download system.",
+        ],
+    },
+    {
+        "version": "0.9.6.4b",
         "date": "2026-11-06",
         "changes": [
             "Redesigned Logs around complete file downloads that open on the computer using the browser.",
@@ -41,7 +51,7 @@ UPDATE_LOG = [
         ],
     },
     {
-        "version": "0.9.6.3a",
+        "version": "0.9.6.3b",
         "date": "2026-10-21",
         "changes": [
             "Check for Updates now uses and saves the beta checkbox directly, without saving unrelated Manager settings.",
@@ -50,12 +60,21 @@ UPDATE_LOG = [
         ],
     },
     {
-        "version": "0.9.6.2a",
+        "version": "0.9.6.2b",
         "date": "2026-10-21",
         "changes": [
-            "Added remote one-click manager updates with automatic restart, browser reconnection, and startup-health rollback.",
-            "Preserved remote login sessions across manager restarts and invalidated sessions after password changes or logout.",
-            "Staged updates outside live code and waited for active server operations; game server processes remain online.",
+            "Added remote one-click manager updates, automatic restart, browser reconnection, and startup-health rollback.",
+            "Preserved remote login sessions across manager restarts and retained the EML beta feature set.",
+            "Waited for active server operations and kept running game servers online during manager updates.",
+        ],
+    },
+    {
+        "version": "0.9.6.1b",
+        "date": "2026-10-20",
+        "changes": [
+            "Added Server Setup & Config > Mods with upstream EML 0.2.0, remote ZIP uploads, mod toggles, configuration editing, and logs.",
+            "Apply Lua patch mods before server start; restore original assets before Steam validation or disabling EML.",
+            "Restricted mod management to admins and stopped servers; failed patches prevent launch.",
         ],
     },
     {
@@ -268,8 +287,10 @@ SERVER_DIR = ROOT / "Enshrouded Dedicated Server"
 STEAMCMD = ROOT / "Steamcmd" / "steamcmd.exe"
 APP_DIR = ROOT / "enshrouded_manager"
 sys.path.insert(0, str(APP_DIR))
+from eml_support import EML, MAX_UPLOAD
 import update_runtime
 import log_downloads
+BUNDLED_VENDOR_DIR = Path(getattr(sys, "_MEIPASS", APP_DIR)) / "vendor"
 DATA_DIR = APP_DIR / "data"
 MANAGER_CONFIG = DATA_DIR / "manager_config.json"
 SERVER_CONFIG = SERVER_DIR / "enshrouded_server.json"
@@ -444,7 +465,7 @@ def default_manager_updates():
         "enabled": True,
         "repo": GITHUB_REPO,
         "interval_hours": 24,
-        "channel": "stable",
+        "channel": "beta" if APP_VERSION.endswith("b") else "stable",
         "github_token": "",
         "last_checked_at": "",
         "latest_version": "",
@@ -793,6 +814,13 @@ class ServerSupervisor:
                 save_json(instance_config_path(self.instance_id), default_server_config(inst["name"], DEFAULT_QUERY_PORT))
                 write_log(f"Created initial enshrouded_server.json for {inst['name']}")
             validate_instance_can_start(self.instance_id)
+            try:
+                eml_for_instance(self.instance_id).apply()
+            except Exception:
+                self.activity = "idle"
+                self.intentional_stop = True
+                update_instance_metadata(self.instance_id, desired_running=False)
+                raise
             creationflags = 0
             if os.name == "nt":
                 creationflags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
@@ -2041,6 +2069,14 @@ def safe_delete_server_directory(server_path):
 
 
 def remove_instance(instance_id, delete_files=False):
+    with supervisor(instance_id).lock:
+        mod_state = eml_for_instance(instance_id).status()
+        if mod_state["enabled"] or mod_state["patched"] or mod_state["recovery_required"]:
+            raise RuntimeError("Disable EML in the Mods tab before removing this instance")
+        return remove_unmodded_instance(instance_id, delete_files)
+
+
+def remove_unmodded_instance(instance_id, delete_files=False):
     sup = SUPERVISORS.get(instance_id)
     if sup and sup.status().get("running"):
         raise RuntimeError("Stop the server before removing this instance")
@@ -2747,6 +2783,7 @@ def install_manager_update():
             raise RuntimeError(f"Update package version v{package_version} does not match release v{release_version}")
         if not (extracted_manager / "update_runtime.py").is_file():
             raise RuntimeError("This package predates remote restart support; install it manually instead")
+        validate_eml_update_target(extracted_manager)
         for source in extracted_manager.glob("*.py"):
             compile(source.read_text(encoding="utf-8"), str(source), "exec")
         update_status("preparing", "Backing up manager files before restart.")
@@ -3008,14 +3045,36 @@ def restore_instance_steam_manifests(moved):
             shutil.copy2(backup, manifest)
 
 
+def validate_eml_update_target(extracted_manager):
+    # Check the verified package's actual capabilities, not its channel suffix.
+    # Historical stable packages had no EML; new stable packages include it.
+    for inst in instances():
+        state = eml_for_instance(inst["id"]).status()
+        if state["enabled"] or state["patched"] or state["recovery_required"]:
+            tool = Path(extracted_manager) / "vendor" / "eml-v0.2.0" / "emm.exe"
+            if not (Path(extracted_manager) / "eml_support.py").is_file() or not tool.is_file():
+                raise RuntimeError("This release does not include EML. Disable EML on every instance before installing it.")
+            from eml_support import digest, EML_SHA256
+            if digest(tool) != EML_SHA256:
+                raise RuntimeError("The update package's EML tool failed SHA-256 verification")
+            break
+
+
+def eml_for_instance(instance_id):
+    inst = get_instance(instance_id)
+    return EML(instance_path(inst["id"]), DATA_DIR / "eml" / inst["id"],
+               BUNDLED_VENDOR_DIR / "eml-v0.2.0" / "emm.exe")
+
+
 def run_update(instance_id=None, status=None):
     inst = get_instance(instance_id)
     if status:
         status("Waiting for SteamCMD; other server installs or updates may be running")
-    with STEAMCMD_LOCK:
+    with supervisor(inst["id"]).lock, STEAMCMD_LOCK:
         if supervisor(inst["id"]).status().get("running"):
             raise RuntimeError("Stop this server before running its SteamCMD update check.")
         try:
+            eml_for_instance(inst["id"]).prepare_update()
             exe = ensure_steamcmd(status=status)
             target_dir = instance_path(inst["id"])
             log_path = safe_child(target_dir, target_dir / "logs" / "esm-steamcmd.log")
@@ -3049,6 +3108,7 @@ def run_update(instance_id=None, status=None):
             notify_webhook_event("server.update.failed", inst["id"],
                                  message=f"Update check failed for {inst['name']}.", details={"error": str(exc)})
             raise
+        eml_for_instance(inst["id"]).finish_update()
         write_log(f"SteamCMD update check completed for {inst['name']}")
         update_instance_metadata(inst["id"], last_updated_at=now_iso(), last_update_warning="")
         notify_webhook_event("server.updated", inst["id"], message=f"Update check completed for {inst['name']}.")
@@ -3750,6 +3810,17 @@ class Handler(SimpleHTTPRequestHandler):
             if route.path not in {"/api/auth/state"} and not self.require_auth():
                 return
             try:
+                if route.path in {"/api/mods", "/api/mods/config", "/api/mods/log"}:
+                    if not self.require_admin():
+                        return
+                    qs = parse_qs(route.query)
+                    inst = get_instance_for_user(self.current_user(), qs.get("instance_id", [None])[0])
+                    eml = eml_for_instance(inst["id"])
+                    if route.path == "/api/mods/log":
+                        return self.send_json({"error": "Use Logs or Download EML Log to download the complete file."}, HTTPStatus.GONE)
+                    if route.path == "/api/mods/config":
+                        return self.send_json(eml.config_file(qs.get("mod_id", [""])[0], qs.get("file", [None])[0]))
+                    return self.send_json(eml.status())
                 if route.path == "/api/manager/update-status":
                     if not self.require_admin():
                         return
@@ -3840,6 +3911,55 @@ class Handler(SimpleHTTPRequestHandler):
         if route in {"/api/manager/install-update", "/api/manager/check-update"} and origin and urlparse(origin).netloc != self.headers.get("Host"):
             return self.send_json({"error": "Cross-origin updates are not permitted"}, 403)
         try:
+            if route.startswith("/api/mods/"):
+                if not self.require_admin():
+                    return
+                origin = self.headers.get("Origin")
+                if origin and urlparse(origin).netloc != self.headers.get("Host"):
+                    raise PermissionError("Cross-origin mod changes are not permitted")
+                if config().get("manager_updates", {}).get("restart_required"):
+                    raise RuntimeError("Restart ESM-Z to finish its pending update before changing mods")
+                length = int(self.headers.get("Content-Length", "0"))
+                limit = MAX_UPLOAD if route == "/api/mods/upload" else 2 * 1024 * 1024
+                if not 0 < length <= limit:
+                    raise ValueError("Missing or oversized request body")
+                if route == "/api/mods/upload":
+                    if self.headers.get("Content-Type", "").split(";")[0] != "application/zip":
+                        raise ValueError("Upload an EML ZIP using application/zip")
+                    qs = parse_qs(urlparse(self.path).query)
+                    instance_id = qs.get("instance_id", [None])[0]
+                    body = None
+                else:
+                    if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
+                        raise ValueError("Expected application/json")
+                    body = self.json_body()
+                    instance_id = body.get("instance_id")
+                if not instance_id:
+                    raise ValueError("Select a server first")
+                inst = get_instance_for_user(self.current_user(), instance_id)
+                sup = supervisor(inst["id"])
+                with sup.lock:
+                    if sup.status()["running"]:
+                        raise RuntimeError("Stop the selected server before changing mods")
+                    eml = eml_for_instance(inst["id"])
+                    if route == "/api/mods/upload":
+                        payload = self.rfile.read(length)
+                        if len(payload) != length:
+                            raise ValueError("Incomplete ZIP upload")
+                        result = eml.import_zip(payload)
+                    elif route == "/api/mods/loader":
+                        result = eml.enable(bool(body.get("enabled")))
+                    elif route == "/api/mods/action":
+                        result = eml.change_mod(body.get("mod_id"), body.get("action"))
+                    elif route == "/api/mods/config":
+                        result = eml.config_file(body.get("mod_id"), body.get("file"), body.get("content"))
+                    elif route == "/api/mods/apply":
+                        eml.apply()
+                        result = eml.status()
+                    else:
+                        return self.send_json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
+                write_log(f"EML operation {route} for {inst['name']}")
+                return self.send_json(result)
             if route == "/api/auth/login":
                 body = self.json_body()
                 user = find_user(username=body.get("username", ""))

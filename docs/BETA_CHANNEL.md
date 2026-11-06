@@ -1,37 +1,46 @@
-# Windows beta channel
+# Stable and beta channels
 
-Starting with 0.9.6.3a/b, **Manager > Run beta version** selects the channel
-used by **Check for Updates** immediately. No separate **Save Manager Settings**
-step is required. Check for Updates saves only the channel choice, leaving other
-unsaved Manager fields alone.
+**EML integration is included in the full Windows stable release from 0.9.6.5a.**
+Beta is no longer required for EML mods. Both current channels include the same
+EML functionality and complete log downloads. Mods must be **EML-compatible,
+self-contained Lua patch mod ZIPs**. See [EML Mods](EML_MODS.md).
 
-1. Check **Run beta version** for beta, or uncheck it for stable.
-2. Click **Check for Updates**.
-3. Click **Download, Install & Restart** and confirm.
-4. Keep the progress dialog open. ESM-Z downloads, verifies, installs, restarts,
-   and reconnects the browser automatically. Check the running version in the header.
+## Existing EML beta users: move to stable
 
-To return from beta to its paired stable version, first disable EML on every
-managed instance. Stable contains no EML integration; beta retains the Mods tab.
-The checkbox selects Windows beta releases and excludes the Linux alpha channel.
-Running game servers and remote login sessions are preserved by manager updates.
+Managers up to 0.9.6.4b assume that every stable package lacks EML and block a
+channel switch while EML is enabled. Use the bridge update to preserve mods:
 
-Existing 0.9.6.2a/b users can install this fix using their current channel's
-updater; no manual restart is needed. Older managers require the one-time
-activation described in [Remote Updates](REMOTE_UPDATES.md).
+1. Keep **Manager > Run beta version** checked.
+2. Click **Check for Updates**, then **Download, Install & Restart** to install
+   **0.9.6.5b**. Wait for the running version in the header to change.
+3. Uncheck **Run beta version**, then click **Check for Updates** again.
+4. Install **0.9.6.5a** and wait for reconnection. The manager now uses stable.
+
+No EML disable/re-enable or game-server stop is required for this channel switch.
+Stored mod packages, edited configurations, EML state, accounts, sessions and
+world saves are preserved. The new updater checks whether the target package
+actually contains the verified EML integration. Returning to a historical package
+without EML still requires disabling EML first.
+
+A manual alternative is to back up the installation, stop only ESM-Z, and extract
+the stable package over the program files while preserving `enshrouded_manager/data`.
+Start one manager copy afterward. Do not replace live files while ESM-Z is running.
+
+## Stable users and new installs
+
+Leave **Run beta version** unchecked and install 0.9.6.5a normally. EML is optional
+and is disabled until an administrator enables it for a stopped server. Existing
+EML-enabled servers retain their settings when moving from beta.
+
+Channel selection takes effect with **Check for Updates** without saving unrelated
+Manager fields. The updater downloads and verifies the package, restarts ESM-Z,
+checks startup health, and reconnects the browser. Game server processes keep running.
+See [Remote Updates](REMOTE_UPDATES.md) for recovery and older-updater activation.
 
 ## Upgrading from 0.9.6 or earlier
 
-The old updater compares only three numeric version components. Install
-0.9.6.1a manually once: stop ESM-Z, back up the existing installation, extract
-the package over it while preserving `enshrouded_manager/data`, and restart.
-The corrected updater then distinguishes 0.9.6.1a from 0.9.6.1b.
+The older updater compares only three numeric version components. Install the
+current package manually once, preserving manager data, then use the corrected
+in-app updater for subsequent releases.
 
-The stable package has no EML integration or third-party EML binary.
-
-## Remote updates from 0.9.6.2a/b
-
-After this updater has been activated, Download & Install Update also restarts
-ESM-Z and reconnects the browser automatically. It preserves the selected channel;
-beta retains Mods and stable does not acquire it. Installing this updater through
-an older manager still requires one final manual restart. See [Remote Updates](REMOTE_UPDATES.md).
+The Windows beta checkbox does not select the experimental Linux alpha channel.

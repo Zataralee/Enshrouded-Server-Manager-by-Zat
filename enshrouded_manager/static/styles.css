@@ -150,6 +150,7 @@ main > section { padding: 24px; }
 .log-file small { color: var(--muted); margin-top: 5px; }
 .log-download { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 7px 16px; border: 1px solid var(--accent); border-radius: 5px; color: var(--accent); text-decoration: none; flex-shrink: 0; }
 .log-download:hover, .log-download:focus-visible { background: var(--accent); color: var(--bg); }
+.log-download.disabled { opacity: .5; pointer-events: none; }
 .log-empty { padding: 24px 0; }
 @media (max-width: 600px) { .log-file { align-items: flex-start; flex-direction: column; gap: 12px; } }
 .actions, .inline {

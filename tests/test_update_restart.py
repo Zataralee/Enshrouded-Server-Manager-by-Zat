@@ -81,7 +81,7 @@ class SessionAndSafetyTests(unittest.TestCase):
 
 
 class RealRestartTests(unittest.TestCase):
-    def run_scenario(self, broken=False, browser=False, channel=None):
+    def run_scenario(self, broken=False, browser=False, channel=None, active_eml=False):
         target_version = manager.APP_VERSION[:-1] + ("b" if channel == "beta" else "a") if channel else "99.0.0"
         running_version = manager.APP_VERSION[:-1] + ("a" if channel == "beta" else "b") if channel else manager.APP_VERSION
         with tempfile.TemporaryDirectory(prefix="esm remote restart ") as temporary:
@@ -94,6 +94,10 @@ class RealRestartTests(unittest.TestCase):
             eml = ROOT / "enshrouded_manager" / "eml_support.py"
             if eml.exists():
                 shutil.copy2(eml, app / eml.name)
+            if active_eml:
+                vendor = app / "vendor" / "eml-v0.2.0"
+                vendor.mkdir(parents=True)
+                shutil.copy2(ROOT / "enshrouded_manager/vendor/eml-v0.2.0/emm.exe", vendor / "emm.exe")
             shutil.copytree(ROOT / "enshrouded_manager" / "static", app / "static")
             if channel:
                 source = (app / "manager.py").read_text().replace(
@@ -112,6 +116,15 @@ class RealRestartTests(unittest.TestCase):
                 config["manager_updates"].update(channel="stable" if channel == "beta" else "beta",
                                                  update_available=False, latest_version="", package_available=False)
             config["users"].append(manager.default_user("reader", "reader-pass", role="user", permissions=["logs"]))
+            if active_eml:
+                instance = manager.default_instance("Active EML", root / "game-server")
+                instance.update(start_on_manager_launch=False, desired_running=False)
+                Path(instance["path"]).mkdir()
+                config.update(instances=[instance], selected_instance_id=instance["id"])
+                mod_state = app / "data" / "eml" / instance["id"] / "state.json"
+                mod_state.parent.mkdir(parents=True)
+                mod_state.write_text(json.dumps({"server": str(Path(instance["path"]).resolve()), "enabled": True,
+                    "patched": False, "baseline": {}, "mods": {}, "recovery_required": False}))
             (app / "data" / "manager_config.json").write_text(json.dumps(config))
             (app / "data" / "preserve.txt").write_text("keep")
             package = root / "release.zip"
@@ -214,6 +227,8 @@ m.main()
                 self.assertTrue(auth["authenticated"])
                 self.assertIsNone(sentinel.poll())
                 self.assertEqual("keep", (app / "data" / "preserve.txt").read_text())
+                if active_eml:
+                    self.assertTrue(json.loads(mod_state.read_text())["enabled"])
                 previous.wait(timeout=5)
             finally:
                 status = runtime.read_json(app / "data" / "manager_updates" / "status.json")
@@ -244,3 +259,6 @@ m.main()
 
     def test_uncheck_beta_without_save_then_install_restarts_into_stable(self):
         self.run_scenario(channel="stable")
+
+    def test_beta_to_full_stable_preserves_enabled_eml_and_login_session(self):
+        self.run_scenario(channel="stable", active_eml=True)

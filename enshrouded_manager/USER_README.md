@@ -168,7 +168,14 @@ Use `Game Server Accounts` to manage game access groups and group passwords. Use
 
 Manager login accounts are controlled by the admin and are not available to regular users.
 
-## Logs
+## EML mods
+
+EML is included in the full stable release. Administrators can use **Server Setup &
+Config > Mods (EML)** for **EML-compatible, self-contained Lua patch mod ZIPs**.
+Check the author's EML and client/server requirements before uploading. See
+[EML Mods](../docs/EML_MODS.md) for supported packages and installation steps.
+
+## Download logs
 
 Use `Logs` to download complete log files for the selected server, then open them
 on the computer using the browser. Search by file name or category and select
