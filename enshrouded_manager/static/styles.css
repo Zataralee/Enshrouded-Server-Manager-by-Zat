@@ -138,7 +138,20 @@ main > section { padding: 24px; }
 .grid { display: grid; gap: 16px; }
 .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 16px; }
-.logs-grid { grid-template-columns: minmax(260px, 360px) 1fr; }
+.log-panel { max-width: 1200px; }
+.log-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+.log-heading h2 { margin-bottom: 6px; }
+.log-heading button { flex-shrink: 0; }
+.log-search { display: grid; gap: 6px; max-width: 480px; margin: 20px 0 12px; }
+.log-files { display: grid; gap: 8px; margin-top: 16px; }
+.log-file { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 14px 16px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; }
+.log-file-info { min-width: 0; }
+.log-file strong, .log-file small { display: block; overflow-wrap: anywhere; }
+.log-file small { color: var(--muted); margin-top: 5px; }
+.log-download { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 7px 16px; border: 1px solid var(--accent); border-radius: 5px; color: var(--accent); text-decoration: none; flex-shrink: 0; }
+.log-download:hover, .log-download:focus-visible { background: var(--accent); color: var(--bg); }
+.log-empty { padding: 24px 0; }
+@media (max-width: 600px) { .log-file { align-items: flex-start; flex-direction: column; gap: 12px; } }
 .actions, .inline {
   display: flex;
   flex-wrap: wrap;

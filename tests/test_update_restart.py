@@ -88,7 +88,7 @@ class RealRestartTests(unittest.TestCase):
             root = Path(temporary)
             app = root / "enshrouded_manager"
             app.mkdir()
-            for name in ("manager.py", "update_runtime.py"):
+            for name in ("manager.py", "update_runtime.py", "log_downloads.py"):
                 shutil.copy2(ROOT / "enshrouded_manager" / name, app / name)
             # The beta branch also needs its existing EML module, but no game/mod binaries are run.
             eml = ROOT / "enshrouded_manager" / "eml_support.py"

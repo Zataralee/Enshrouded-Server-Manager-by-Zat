@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ESM-Z</title>
-    <link rel="stylesheet" href="/styles.css?v=20261021-remote-update">
+    <link rel="stylesheet" href="/styles.css?v=20261106-downloads">
 </head>
 <body>
   <div id="login" class="login hidden">
@@ -210,15 +210,16 @@
     </section>
 
     <section id="logs" class="tab">
-      <div class="grid logs-grid">
-        <div class="panel">
-          <h2>Log Files</h2>
-          <div id="logList" class="list"></div>
+      <div class="panel log-panel">
+        <div class="log-heading">
+          <div><h2>Download Logs</h2>
+            <p>Download a complete log, then open it on this computer from your browser's downloads.</p></div>
+          <button id="refreshLogs" type="button">Refresh</button>
         </div>
-        <div class="panel">
-          <h2 id="logTitle">Log Output</h2>
-          <pre id="logOutput"></pre>
-        </div>
+        <p class="form-note">Files include everything written before the download starts. Select Refresh for updated sizes and new files.</p>
+        <label class="log-search">Find a log <input id="logSearch" type="search" placeholder="Search by file name or category"></label>
+        <p id="logStatus" role="status" aria-live="polite"></p>
+        <div id="logList" class="log-files"></div>
       </div>
     </section>
 
@@ -464,7 +465,8 @@
     <p id="updateProgressError" class="error"></p>
     <button id="closeUpdateProgress" type="button" hidden>Close</button>
   </dialog>
-  <script src="/app.js?v=20261021-remote-update"></script>
+  <script src="/logs.js?v=20261106-downloads"></script>
+  <script src="/app.js?v=20261106-downloads"></script>
   <script src="/mods.js?v=0.9.6.2b"></script>
 </body>
 </html>

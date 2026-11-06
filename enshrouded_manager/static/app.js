@@ -308,6 +308,7 @@ function activateTab(tab, section = "") {
     document.querySelector(`nav button[data-tab="${targetTab}"]`)?.classList.add("active");
   }
   document.querySelector(`#${targetTab}`)?.classList.add("active");
+  if (targetTab === "logs" && typeof logDownloads !== "undefined") logDownloads.open();
 }
 
 function renderAccess() {
@@ -489,9 +490,7 @@ function renderInstallJobs() {
 }
 
 function renderLogs() {
-  document.querySelector("#logList").innerHTML = (state.logs || []).map(log => `
-    <button data-log="${log.name}"><span>${log.name}</span><small>${Math.round(log.size / 1024)} KB</small></button>
-  `).join("");
+  if (typeof logDownloads !== "undefined") logDownloads.contextChanged();
 }
 
 async function renderBackups() {
@@ -989,7 +988,8 @@ function renderInstructions() {
   }
   if (can("logs")) {
     parts.push(instructionSection("Logs", `
-      <p>Use Logs to inspect manager and server log files when a server will not start, players cannot connect, or an update/backup needs confirmation.</p>
+      <p>Use Logs to download complete server logs and archived logs. Administrators can also download manager and update logs. Open downloaded files on this computer using your preferred text editor.</p>
+      <p>The file list loads when you open Logs. Select Refresh to update it; log contents are never streamed into the page.</p>
     `));
   }
   if (can("saves") || can("backups")) {
@@ -1199,12 +1199,6 @@ document.addEventListener("click", async event => {
   }
   if (btn.dataset.tab) {
     activateTab(btn.dataset.tab, btn.dataset.parentSection || "");
-    return;
-  }
-  if (btn.dataset.log) {
-    const data = await api(`/api/log?path=${encodeURIComponent(btn.dataset.log)}&instance_id=${encodeURIComponent(selectedInstanceId() || "")}`);
-    document.querySelector("#logTitle").textContent = btn.dataset.log;
-    document.querySelector("#logOutput").textContent = data.content;
     return;
   }
   if (btn.dataset.removeSchedule) {

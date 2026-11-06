@@ -74,6 +74,6 @@
 
 ## Logs And Instructions
 
-- View server and manager logs from the UI.
+- Download complete server logs and archives to the computer using the browser; administrators can also download manager and updater logs. Search and explicitly refresh the file list. See [Log Downloads](LOG_DOWNLOADS.md).
 - Read role-aware instructions inside the Instructions tab.
 - Read the manager update history inside the Updates tab.
