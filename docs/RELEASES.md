@@ -2,6 +2,17 @@
 
 ## Current Release
 
+**v0.9.6.4a / v0.9.6.4b** - 2026-11-06
+
+- Replaced the log viewer with complete file downloads to the computer using the browser. Download a log, then open it locally.
+- Added filename/category search, sizes, modification dates, an explicit Refresh action, and archived server logs.
+- Removed recursive log discovery from status polling; file lists load only when needed or explicitly refreshed. Downloads use bounded memory and stop at the file size captured when they start.
+- Limited users to approved logs for their assigned or owned server. Manager, update-console and update-job logs are administrator-only, including before any server is configured.
+- Retired arbitrary-path previews and blocked configuration files, traversal, symlinks, hard links, Windows junctions and static-file traversal.
+- Stable excludes EML; beta retains existing EML integration. Install through the existing channel updater; no data migration is needed. See [Log Downloads](LOG_DOWNLOADS.md).
+
+### Previous release
+
 **v0.9.6.3a / v0.9.6.3b** - 2026-10-21
 
 Check for Updates now reads and saves the Run beta version checkbox directly; no separate Save Manager Settings step is required. Install uses the existing download, verification, automatic restart, and browser reconnection flow. Switching the checkbox invalidates old channel results. Unrelated unsaved Manager settings are not applied. Stable excludes EML; beta retains it.

@@ -47,7 +47,7 @@ Other Enshrouded server projects have reproduced this error and recovered by rem
 ## What ESM-Z Does
 
 1. Runs one SteamCMD install/update job at a time for this manager process.
-2. Saves SteamCMD stdout and stderr directly to the selected server's `logs/esm-steamcmd.log`, which can be read from its Logs tab while the update runs.
+2. Saves SteamCMD stdout and stderr directly to the selected server's `logs/esm-steamcmd.log`, which can be downloaded from its Logs tab.
 3. Requires SteamCMD to exit successfully and confirm that app 2278520 is fully installed or already up to date.
 4. If that attempt reports the exact Enshrouded `0x6` state, moves `appmanifest_2278520.acf` and `appmanifest_228980.acf`, when present, from the selected install's `steamapps` folder into a timestamped `steamapps/esm-manifest-backups` subfolder.
 5. Retries the same install/update command once. With a fresh install and no manifests, this is a single retry for a possible transient Steam failure.
@@ -65,4 +65,4 @@ The **Last update** timestamp records the last successful install/update check, 
 
 ## If Recovery Fails
 
-Open **Logs**, select `esm-steamcmd.log`, and inspect both attempts. SteamCMD's own `<manager folder>/Steamcmd/logs/content_log.txt` on the host can provide more detail about network failures, depot authorization, insufficient storage, or permissions. Resolve the reported problem and run Update Check again. A failed check does not establish that the installed server is current; players may encounter a version mismatch until an update succeeds.
+Open **Logs**, download `esm-steamcmd.log`, and open it locally to inspect both attempts. SteamCMD's own `<manager folder>/Steamcmd/logs/content_log.txt` on the host can provide more detail about network failures, depot authorization, insufficient storage, or permissions. Resolve the reported problem and run Update Check again. A failed check does not establish that the installed server is current; players may encounter a version mismatch until an update succeeds.

@@ -4,11 +4,11 @@
 
 The stable release supports Windows hosts. Experimental Linux support is available separately through the `v0.10.0-linux-alpha.7` prerelease and is not production-ready.
 
-Current release: **v0.9.6.3a**
+Current release: **v0.9.6.4a**
 
 Experimental Linux prerelease: **v0.10.0-linux-alpha.7**
 
-Shareable package: [`release/ESM-Z-PythonRequired-v0.9.6.3a.zip`](release/ESM-Z-PythonRequired-v0.9.6.3a.zip)
+Shareable package: [`release/ESM-Z-PythonRequired-v0.9.6.4a.zip`](release/ESM-Z-PythonRequired-v0.9.6.4a.zip)
 
 ![ESM-Z dashboard](docs/screenshots/dashboard.png)
 
@@ -33,7 +33,7 @@ Shareable package: [`release/ESM-Z-PythonRequired-v0.9.6.3a.zip`](release/ESM-Z-
 
 Use the Python-required release if Python 3.11 or newer is already installed on the server.
 
-1. Download [`release/ESM-Z-PythonRequired-v0.9.6.3a.zip`](release/ESM-Z-PythonRequired-v0.9.6.3a.zip).
+1. Download [`release/ESM-Z-PythonRequired-v0.9.6.4a.zip`](release/ESM-Z-PythonRequired-v0.9.6.4a.zip).
 2. Extract it to the machine that will host the manager.
 3. Run `Run ESM-Z.bat`.
 4. Open `http://127.0.0.1:8080` on that machine.
@@ -58,6 +58,7 @@ New installs can take several minutes. If SteamCMD is being downloaded for the f
 
 - [Install Guide](docs/INSTALL.md)
 - [Feature Guide](docs/FEATURES.md)
+- [Download complete logs](docs/LOG_DOWNLOADS.md)
 - [Release Notes](docs/RELEASES.md)
 - [Screenshots](docs/SCREENSHOTS.md)
 - [Linux Host Support Analysis](docs/LINUX_SUPPORT_ANALYSIS.md)

@@ -136,6 +136,12 @@ class LogDownloadTests(unittest.TestCase):
         for path in ["/%2e%2e/data/manager_config.json", "/%2e%2e%5cdata%5cmanager_config.json"]:
             self.assertEqual(404, self.get(path)[0].status)
 
+    def test_static_windows_network_paths_are_rejected_before_filesystem_access(self):
+        handler = manager.Handler.__new__(manager.Handler)
+        with mock.patch.object(manager, "safe_child", side_effect=AssertionError("must not resolve network paths")):
+            for path in ["/%5c%5cunknown-host%5cshare%5cfile", "/C:%5csecret", "/bad%00path"]:
+                self.assertEqual(str(self.static / "__not_found__"), handler.translate_path(path))
+
     def test_admin_can_download_manager_update_and_job_logs_without_a_server(self):
         self.user = {"id": "admin", "role": "admin"}
         self.cfg["instances"] = []
