@@ -23,7 +23,7 @@ import re
 from http import HTTPStatus
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 
 APP_VERSION = "0.9.6.3a"
@@ -258,6 +258,7 @@ STEAMCMD = ROOT / "Steamcmd" / "steamcmd.exe"
 APP_DIR = ROOT / "enshrouded_manager"
 sys.path.insert(0, str(APP_DIR))
 import update_runtime
+import log_downloads
 DATA_DIR = APP_DIR / "data"
 MANAGER_CONFIG = DATA_DIR / "manager_config.json"
 SERVER_CONFIG = SERVER_DIR / "enshrouded_server.json"
@@ -3154,57 +3155,20 @@ def start_install_job(body, user, retry_instance_id=None):
     return job_id
 
 
-def list_logs(instance_id=None):
-    logs = []
-    inst_dir = instance_path(instance_id)
-    for base in [inst_dir / "logs", MANAGER_LOG.parent]:
-        if not base.exists():
-            continue
-        for path in base.rglob("*"):
-            if path.is_file() and path.suffix.lower() in [".log", ".txt"]:
-                stat = path.stat()
-                try:
-                    name = str(path.relative_to(ROOT))
-                except ValueError:
-                    name = str(path)
-                logs.append({
-                    "name": name,
-                    "size": stat.st_size,
-                    "modified": dt.datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"),
-                })
-    return sorted(logs, key=lambda item: item["modified"], reverse=True)
-
-
-def list_logs_no_instance():
-    logs = []
-    if MANAGER_LOG.parent.exists():
-        for path in MANAGER_LOG.parent.glob("*.log"):
-            stat = path.stat()
-            logs.append({
-                "name": str(path.relative_to(ROOT)),
-                "size": stat.st_size,
-                "modified": dt.datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"),
-            })
-    return sorted(logs, key=lambda item: item["modified"], reverse=True)
-
-
-def read_tail(path_name, instance_id=None, max_bytes=80000):
-    raw = Path(path_name)
-    if raw.is_absolute():
-        path = safe_child(instance_path(instance_id), raw)
-    else:
-        candidate = ROOT / path_name
-        if candidate.exists():
-            path = safe_child(ROOT, candidate)
-        else:
-            path = safe_child(instance_path(instance_id), instance_path(instance_id) / path_name)
-    if not path.is_file():
-        raise FileNotFoundError(path_name)
-    with path.open("rb") as fh:
-        if path.stat().st_size > max_bytes:
-            fh.seek(-max_bytes, os.SEEK_END)
-        data = fh.read()
-    return data.decode("utf-8", errors="replace")
+def logs_for_user(user, requested_instance_id=None):
+    """Resolve an exact authorized instance; never silently substitute another."""
+    if not has_permission(user, "logs"):
+        raise PermissionError("Log permission required")
+    visible = visible_instances_for_user(user)
+    wanted = requested_instance_id or config().get("selected_instance_id")
+    inst = next((item for item in visible if item["id"] == wanted), None)
+    if requested_instance_id and inst is None:
+        raise PermissionError("This server is not assigned to your account")
+    if inst is None and visible:
+        inst = visible[0]
+    if inst is None and not is_admin(user):
+        raise PermissionError("No server is assigned to your account")
+    return log_downloads.LogCatalog(APP_DIR, Path(inst["path"]) if inst else None, is_admin(user))
 
 
 def backup_name(prefix="backup"):
@@ -3688,7 +3652,10 @@ class Handler(SimpleHTTPRequestHandler):
         route = urlparse(path).path
         if route == "/":
             return str(STATIC_DIR / "index.html")
-        return str(STATIC_DIR / route.lstrip("/"))
+        try:
+            return str(safe_child(STATIC_DIR, STATIC_DIR / unquote(route).lstrip("/")))
+        except (ValueError, OSError):
+            return str(STATIC_DIR / "__not_found__")
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
@@ -3742,6 +3709,25 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_json({"error": "Permission denied"}, HTTPStatus.FORBIDDEN)
         return False
 
+    def download_log(self, catalog, log_id):
+        # Open and authorize before sending headers. A browser handles the file
+        # transfer directly: no JSON, base64 or full-file buffering in either UI.
+        source, size, name = catalog.open(log_id)
+        with source:
+            fallback = re.sub(r"[^A-Za-z0-9._-]", "_", name) or "download.log"
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Disposition", f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{quote(name, safe='')}")
+            self.send_header("Content-Length", str(size))
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            try:
+                log_downloads.copy_snapshot(source, self.wfile, size)
+            except (OSError, ConnectionError):
+                # Headers have already been sent. Closing makes a truncated
+                # transfer fail in the browser instead of appending JSON to it.
+                self.close_connection = True
+
     def do_GET(self):
         route = urlparse(self.path)
         if route.path == "/api/health":
@@ -3765,27 +3751,28 @@ class Handler(SimpleHTTPRequestHandler):
                         inst = get_instance_for_user(user, requested_instance_id)
                         sup_status = supervisor(inst["id"]).status()
                         server_cfg = load_json(instance_config_path(inst["id"]), {})
-                        logs = list_logs(inst["id"])
                     except FileNotFoundError:
                         inst = None
                         sup_status = {}
                         server_cfg = {}
-                        logs = list_logs_no_instance()
                     return self.send_json({
                         "server": sup_status,
                         "manager": public_config(user),
                         "instances": [public_instance(item) for item in visible_instances_for_user(user)],
                         "selected_instance": public_instance(inst) if inst else None,
                         "server_config": server_cfg,
-                        "logs": logs,
                         "install_jobs": visible_jobs_for_user(user),
                     })
-                if route.path == "/api/log":
+                if route.path in {"/api/logs", "/api/logs/download"}:
                     if not self.require_perm("logs"):
                         return
                     qs = parse_qs(route.query)
-                    inst = get_instance_for_user(self.current_user(), qs.get("instance_id", [None])[0])
-                    return self.send_json({"content": read_tail(qs.get("path", [""])[0], inst["id"])})
+                    catalog = logs_for_user(self.current_user(), qs.get("instance_id", [None])[0])
+                    if route.path == "/api/logs/download":
+                        return self.download_log(catalog, qs.get("log_id", [""])[0])
+                    return self.send_json(catalog.list())
+                if route.path == "/api/log":
+                    return self.send_json({"error": "Log previews were replaced by full-file downloads. Reload ESM-Z and open Logs."}, HTTPStatus.GONE)
                 if route.path == "/api/backups":
                     if not self.require_perm("backups"):
                         return
@@ -3813,6 +3800,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
             except PermissionError as exc:
                 return self.send_json({"error": str(exc)}, HTTPStatus.FORBIDDEN)
+            except FileNotFoundError:
+                return self.send_json({"error": "The log is no longer available. Refresh the log list."}, HTTPStatus.NOT_FOUND)
             except Exception as exc:
                 write_log(f"API error on {route.path}: {exc}")
                 return self.send_json({"error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)

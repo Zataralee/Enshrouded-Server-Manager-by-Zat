@@ -170,7 +170,11 @@ Manager login accounts are controlled by the admin and are not available to regu
 
 ## Logs
 
-Use `Logs` to read manager and server log files for the selected server.
+Use `Logs` to download complete log files for the selected server, then open them
+on the computer using the browser. Search by file name or category and select
+`Refresh` for new files and updated sizes. No log contents stream into the page.
+Administrators can also download manager and updater logs; other users see only
+logs for their assigned or owned server. See [Log Downloads](../docs/LOG_DOWNLOADS.md).
 
 Logs are helpful when:
 
