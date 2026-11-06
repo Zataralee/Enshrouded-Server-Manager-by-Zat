@@ -86,18 +86,11 @@ function M.prepare(b,profiles,api)
         b.alias("fire_ground_"..field[1],"fire_ground_visual_transform",3902764048,4,field[2])
     end
     b.float("fire_one",1)
-    -- Existing client-known, visual-only, non-saving bonfire. No template edits.
-    local template=api.resource("d0d55bba-7951-4213-8c2d-f8efb416fa2a","keen::ecs::TemplateResource")
-    local allowed={CurrentTransform=true,DoNotSave=true,RenderTransform=true,SpawnTime=true,
-        StaticTransform=true,VfxComponent=true,VfxComponentResource=true}
-    local no_save=false;local visual=false
-    for _,c in ipairs(template.components) do
-        if not allowed[c.type:match("([^:]+)$")] then api.fail("Ground fire: unexpected bonfire component "..c.type) end
-        if c.type=="keen::ecs::DoNotSave" then no_save=true end
-        if c.type=="keen::ecs::VfxComponentResource" then visual=c.value.vfx=="029761cb-618a-497b-b6af-5993c378f4a1" end
-    end
-    if not no_save or not visual or template.omitTransformReplication then api.fail("Ground fire: unsupported bonfire visual") end
-    b.add("fire_ground_template",709155311,string.pack("<I4I2I2",0xd0d55bba,0x7951,0x4213)..string.char(0x8c,0x2d,0xf8,0xef,0xb4,0x16,0xfa,0x2a),4)
+    -- Existing incendiary zone; ground_fire.lua guards its native damage path.
+    b.add("fire_ground_template",709155311,string.pack("<I4I2I2",0x44cb7678,0x8c69,0x435a)..string.char(0x80,0x2e,0x69,0xad,0xb1,0x13,0x75,0xa9),4)
+    b.native("fire_impact_transform","e28f0d79-e2fe-46ba-8d82-9ba368cb30c7","ImpactTransform::transform")
+    b.bool("fire_ground_hit",false)
+    b.add("fire_neutral_material",283622266,string.pack("<I4",0),4)
     -- Immutable dispatch thresholds live outside the shared writable arena.
     for i=0,math.floor(65535/66) do b.add("fire_index_"..i,848563180,string.pack("<I4",i),4) end
     for _,field in ipairs(fields) do b.uint("fire_r_"..field,0) end
@@ -127,7 +120,7 @@ function M.prepare(b,profiles,api)
         for _,key in ipairs({"duration","tick","delay","fanout","limit"}) do b.uint(p..key,values[key]) end
         for _,key in ipairs({"initial_radius","radius","strength","chance"}) do b.float(p..key,values[key]) end
         b.uint(p.."ground_duration",s.ground_fire_enabled and s.initial_radius>0 and s.ground_fire_duration_ms or 0)
-        b.float(p.."ground_scale",s.initial_radius*s.ground_fire_visual_scale)
+        b.float(p.."ground_scale",s.initial_radius*s.ground_fire_visual_scale/1.5)
     end
 end
 function M.emit(b,profiles,api)
@@ -148,7 +141,9 @@ function M.emit(b,profiles,api)
     local qa={"fire_query_radius","origin","factions","index","candidate_transform","candidate"}
     for _,a in ipairs(profiles) do
         b.mark(a.key.."_fire_start")
+        b.load("fire_ground_hit");branch(9,a.key.."_eligible")
         b.load("eligible");branch(10,"finish")
+        mark(a.key.."_eligible")
         if a.config.chance_percent<100 then b.call("RandomBranchNode",{a.key.."_fire_chance"});branch(10,"finish") end
         for _,field in ipairs({"duration","tick","delay","fanout","limit","initial_radius","radius","strength","ground_duration","ground_scale"}) do
             set(a.key.."_fire_"..field,"fire_"..field)
@@ -173,8 +168,9 @@ function M.emit(b,profiles,api)
     set("fire_ground_scale","fire_ground_scale_x");set("fire_ground_scale","fire_ground_scale_z")
     b.done("GetSelf",{"fire_ground_owner"})
     b.done("SpawnEntity",{false,false,false,"fire_ground_owner",false,false,"fire_ground_visual_transform",
-        "fire_ground_template","false","false","true","true","fire_ground_entity"})
+        "fire_ground_template","false","false","true","false","fire_ground_entity"})
     mark("ground_spawned")
+    b.load("fire_ground_hit");branch(9,"initial_area")
     set("fire_initial_value","best_value");b.zero("fire_secondary")
     living("best","initial_area")
     branch(8,"ignite")
@@ -216,7 +212,7 @@ function M.emit(b,profiles,api)
     -- Native ignoreConsecutiveHits=true SKIPS entities already hit. False is
     -- required for DoT, including the original victim of the arrow's direct hit.
     b.done("ApplyDamage",{false,"false",false,false,"false","false",false,
-        "material::valueId","WeaponCategory::value","AttackCategory::value","fire_damage",
+        "fire_neutral_material","WeaponCategory::value","AttackCategory::value","fire_damage",
         "fire_no_reaction","fire_no_push","DamageScaleAttribute::value",false,false,false,false,
         "mul2::result","HitDirection::value","ForEach::normal","position","fire_target","GetRoot::entityId",false})
     b.zero("fire_r_unpaid")

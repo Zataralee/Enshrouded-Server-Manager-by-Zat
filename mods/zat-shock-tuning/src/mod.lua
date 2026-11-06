@@ -104,11 +104,14 @@ if config.arrow_chain == nil then
     end
 end
 if config.fire_arrows == nil then config.fire_arrows = require("fire_arrows").defaults() end
-keys(config, {schema_version=true, chain_lightning=true, lightning_arrows=true, eternal_arrows=true, mass_destruction=true, arrow_chain=true, fire_arrows=true}, "config")
+local fire_effects=require("fire_effects")
+if config.fire_effects==nil then config.fire_effects=fire_effects.defaults() end
+keys(config, {schema_version=true, chain_lightning=true, lightning_arrows=true, eternal_arrows=true, mass_destruction=true, arrow_chain=true, fire_arrows=true, fire_effects=true}, "config")
+local selected_fire_effects=fire_effects.validate(config.fire_effects,{fail=fail,keys=keys,number=number})
 if config.schema_version ~= 1 then fail("Unsupported configuration schema") end
 local revision = tostring(game.version):match("^(%d+)|")
-if revision ~= "1273043" then
-    fail("Unsupported game revision " .. tostring(game.version) .. "; this prototype supports 1273043 only")
+if revision ~= "1273043" and revision ~= "1285601" and revision ~= "1287369" then
+    fail("Unsupported game revision " .. tostring(game.version) .. "; supported revisions: 1273043, 1285601, 1287369")
 end
 local chain, arrows, aoe = config.chain_lightning, config.lightning_arrows, config.mass_destruction
 if type(chain)=="table" and chain.propagation==nil then
@@ -212,4 +215,8 @@ for _, change in ipairs(changes) do
     print("[Zat Shock Tuning] " .. change.label .. ": " .. change.before .. " -> " .. change.after)
 end
 for _, change in ipairs(changes) do change.apply() end
+-- The visual layer consumes the fire-arrow program built above. EML commits
+-- patches only if the whole script succeeds; failures retain the clean index.
+fire_effects.apply(config.fire_effects,selected_fire_effects,config.fire_arrows,
+    {fail=fail,keys=keys,number=number,resource=resource})
 print("[Zat Shock Tuning] Applied " .. #changes .. " setting changes; server-only gameplay remains unverified")

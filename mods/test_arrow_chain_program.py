@@ -212,19 +212,24 @@ class VM:
                 self.stack.append(op - 12)
             elif op in (14, 15):
                 self.stack[-1] = (self.stack[-1] + (1 if op == 14 else -1)) & 0xffffffff
-            elif op in (1, 2, 3, 5, 6):
+            elif op in (1, 2, 3, 5, 6, 7):
                 b, a = self.stack.pop(), self.stack.pop()
                 signed = lambda v: v - 0x100000000 if v & 0x80000000 else v
-                if op == 5: result = int(signed(a) < signed(b))
+                if op == 7: result = int(signed(a) <= signed(b))
+                elif op == 5: result = int(signed(a) < signed(b))
                 elif op == 6: result = int(a == b)
                 else: result = ({1: lambda: a+b, 2: lambda: a-b, 3: lambda: a*b}[op]()) & 0xffffffff
                 self.stack.append(result)
+            elif op == 17:
+                self.stack.append(self.stack[-1])
             elif op == 22:
                 entry = self.program.layout[c[pc] & 0xffff]
                 assert entry['type']['value'] in (848563180, 2556031774, 3365180733,
                                                   3756319748, 3902764048), (
                     'native VM rejects GLoad type before damage', entry['dbgName'])
-                self.stack.append(self.read(c[pc])); pc += 1
+                value=self.read(c[pc])
+                if entry["type"]["value"]==3756319748: value//=1000000
+                self.stack.append(value); pc += 1
             elif op == 24:
                 self.write(c[pc], self.stack.pop()); pc += 1
             elif op == 25:

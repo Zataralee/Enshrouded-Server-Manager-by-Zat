@@ -12,6 +12,8 @@ from test_arrow_chain_program import Program, VM
 ROOT = Path(__file__).resolve().parents[1]
 GUID = 'c0a8231a-f87f-467c-ad9d-6d4fe93ecda7'
 TIERS = {15: 685713190, 28: 225262139, 45: 678529367}
+ZONE='47746ed5-c7ab-4835-850b-0dc02b1665b7'
+ZONE_TEMPLATE='44cb7678-8c69-435a-802e-69adb11375a9'
 TEMPLATES = ['f1174ce0-7b9f-40c8-a208-2018a58e532c', '12056e78-fbb4-4929-9765-be94c69b91b9',
              'd6dca074-b8df-454b-a973-608740cf86c4']
 
@@ -31,7 +33,7 @@ class FireVM(VM):
 
     def native(self, call_id, function):
         name, params = self.program.functions[function]
-        handled = {'HasBuffNode', 'HasEntityTag', 'ApplyBuff', 'MulValues', 'ApplyDamage', 'IsValidEntity', 'IsInState', 'GetSelf', 'SpawnEntity', 'DestroyEntity'}
+        handled = {'HasBuffNode', 'HasEntityTag', 'ApplyBuff', 'MulValues', 'ApplyDamage', 'IsValidEntity', 'IsInState', 'GetSelf', 'SpawnEntity', 'DestroyEntity', 'ForEachCollisionInStream', 'RandomValueNode', 'AddValues'}
         if name not in handled: return super().native(call_id, function)
         args, refs = {}, {}
         for role in ('out', 'cfg', 'in'):
@@ -39,12 +41,20 @@ class FireVM(VM):
                 if kind == role:
                     ptr = self.stack.pop(); refs[key] = ptr; args[key] = self.read(ptr)
         result = True
-        if name == 'GetSelf': self.write(refs['entityId'], 2)
+        if name == 'ForEachCollisionInStream':
+            assert refs['transform'] and not refs['otherRootEntity']
+            self.write(refs['transform'], self.impact_point)
+            self.write(refs['position'], self.impact_point)
+            self.write(refs['otherEntity'], 0)
+            self.write(refs['isCombatTarget'], 0)
+        elif name == 'RandomValueNode': self.write(refs['value'], 0)
+        elif name == 'AddValues': self.write(refs['result'], args['valueA']+args['valueB'])
+        elif name == 'GetSelf': self.write(refs['entityId'], 2)
         elif name == 'SpawnEntity':
             import uuid
-            assert args['templateInput'] == uuid.UUID('d0d55bba-7951-4213-8c2d-f8efb416fa2a').bytes_le
+            assert args['templateInput'] == uuid.UUID('44cb7678-8c69-435a-802e-69adb11375a9').bytes_le
             assert args['parentEntityId']==2 and args['addDespawnLink']==1
-            assert args['breakImpactHierarchy']==1 and args['targetEntityId'] is None
+            assert args['breakImpactHierarchy']==0 and args['targetEntityId'] is None
             entry=self.program.layout[refs['transform'] & 0xffff]
             rotation_scale=struct.unpack_from('<7f',self.mem,entry['offsetInBytes']+24)
             assert rotation_scale[:4]==(0,0,0,1) and rotation_scale[5]==1
@@ -79,6 +89,7 @@ class FireVM(VM):
             if args['ignoreConsecutiveHits'] and args['targetId'] in self.visited:
                 self.stack.append(0)
                 return
+            if 'ZatArrowChain::fire_neutral_material' in self.program.names: assert args['materialId'] == 0
             assert args['canCrit'] == 0 and args['canBeBlocked'] == 0
             for key in ('manaCost', 'specialAbilityGain', 'attackStaminaMod', 'noiseRange'):
                 assert args[key] is None
@@ -95,8 +106,18 @@ class FireVM(VM):
             self.visited.add(args['targetId'])
         self.stack.append(int(result))
 
-    def execute(self, overrides=None, kill_initial=False, blocked=False):
+    def execute(self, overrides=None, kill_initial=False, blocked=False, ground_hit=False):
         for key, value in (overrides or {}).items(): self.set('ZatArrowChain::fire_45_fire_'+key, value)
+        if ground_hit:
+            self.impact_point = getattr(self,'impact_point',(40,0,0))
+            self.set('AttackVariation::value',0)
+            self.set('muloffset::value',1)
+            self.set('AttackMod::value',1.5)
+            self.run(39,{60})
+            assert self.stack.pop()==1
+            self.run(self.program.code[221],{92,191})
+            assert not self.stack and not self.queries
+            return self
         self.run(self.program.code[89], {94})
         self.visited.add(10)  # Original arrow hit precedes the burn controller.
         if kill_initial: self.positions.pop(10)
@@ -260,6 +281,69 @@ def check(p):
     return results
 
 
+def check_zone(arrow_program, out, base_dir):
+    file=next((out/'ImpactProgram').glob(ZONE+'*'))
+    with (out/'zone-disassembly.log').open('w') as log:
+        subprocess.run([str(out.parent/'parser/kfc-parser.exe'),'impact','disassemble','-i',str(file),'-o',str(out/'zone')],
+                       stdout=log,stderr=subprocess.STDOUT,check=True)
+    zone=Program(json.loads(file.read_text()),(out/'zone.impact').read_text())
+    zone.validate_structure((out/'zone.shutdown.impact').read_text())
+    baseline=json.loads(next((base_dir/'ImpactProgram').glob(ZONE+'*')).read_text())
+    code=zone.code[:len(baseline['code'])]
+    for i in (0,1,50,51,52,54,55,56): code[i]=baseline['code'][i]
+    assert code==baseline['code'] and zone.p['data'][:len(baseline['data'])]==baseline['data']
+    clean=json.loads(next((base_dir/'TemplateResource').glob(ZONE_TEMPLATE+'*')).read_text())
+    edited=json.loads(next((out/'TemplateResource').glob(ZONE_TEMPLATE+'*')).read_text())
+    clean['components']=[c for c in clean['components'] if c['$type']!='keen::ecs::LifeTime']
+    cfg=next(c['$value']['configValues'] for c in edited['components'] if c['$type']=='keen::ecs::ImpactConfiguration')
+    marker=zone.layout[zone.names['ZatIncendiaryGround::managed_lifetime']]['configId']
+    cfg['simple']=[c for c in cfg['simple'] if c['$value']['configId']!=marker]
+    assert clean==edited  # Client VFX, sound, parameters, collider and vanilla damage config remain intact.
+    arrow=json.loads(next((out/'TemplateResource').glob(TEMPLATES[2]+'*')).read_text())
+    tags=next(c['$value']['tags'] for c in arrow['components'] if c['$type']=='keen::ecs::EntityTagContainer')
+    assert {'tag':'b7ab3989-b293-45f6-b70f-998a2bf248de'} in tags
+
+    class ZoneVM(VM):
+        def __init__(self, marked=False, managed=True, parent_until=12000):
+            super().__init__(arrow_program,TIERS[45],{},True,0)
+            self.program=zone;self.mem=bytearray(zone.p['data']);self.marked=marked
+            self.parent_until=parent_until;self.buff_count=0;self.tick_ms=10
+            self.set('ZatIncendiaryGround::managed_lifetime',int(managed))
+        def native(self, call_id, function):
+            name,params=self.program.functions[function];args={};refs={}
+            for role in ('out','cfg','in'):
+                for kind,key,typ in params:
+                    if kind==role:
+                        ptr=self.stack.pop();refs[key]=ptr;args[key]=self.read(ptr)
+            result=True
+            if name=='GetParent': self.write(refs['entityId'],2)
+            elif name=='IsValidEntity': result=self.now<self.parent_until
+            elif name=='HasEntityTag':
+                import uuid
+                assert args['entityTag']==uuid.UUID('b7ab3989-b293-45f6-b70f-998a2bf248de').bytes_le
+                result=self.marked
+            elif name in ('OnEvent','FilterFriends'): self.write(refs['eventStream'],1)
+            elif name=='ForEachCollisionInStream':
+                result=args['index']==0;self.write(refs['index'],1)
+                self.write(refs['otherRootEntity'],11)
+            elif name=='ApplyBuff': self.buff_count+=1
+            else: raise AssertionError(name)
+            self.stack.append(int(result))
+    visual=ZoneVM(marked=True);visual.run(0,set())
+    assert visual.buff_count==0 and visual.destroyed and visual.now==12000
+    ordinary=ZoneVM();ordinary.run(0,set())
+    assert ordinary.buff_count>2 and ordinary.destroyed and ordinary.now==9000, (ordinary.buff_count,ordinary.destroyed,ordinary.now)
+    unrelated=ZoneVM(managed=False)
+    unrelated.run(0,{2})
+    for _ in range(3):
+        unrelated.run(2,{0});assert not unrelated.destroyed
+        unrelated.run(0,{2})
+    assert unrelated.buff_count==6
+    return ['incendiary template retains native client VFX/audio and original damage configuration',
+            'marked arrow zones apply no native buffs and survive past nine seconds until parent cleanup',
+            'ordinary construct grenades retain native burns and a nine-second lifetime; other grenade templates bypass watchdog']
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--fixture-dir',required=True,type=Path)
@@ -277,7 +361,7 @@ def main():
         out=work/name;out.mkdir(exist_ok=True)
         with (out/'export.log').open('w') as log:
             subprocess.run([str(work/'parser/kfc-parser.exe'),'unpack','-g',str(work/'Server'),'-o',str(out),
-                            '-f',','.join([GUID+'_d4922d88_0',*(g+'_39768775_0' for g in TEMPLATES)])],
+                            '-f',','.join([GUID+'_d4922d88_0',*(g+'_39768775_0' for g in TEMPLATES),ZONE+'_d4922d88_0',ZONE_TEMPLATE+'_39768775_0'])],
                            stdout=log,stderr=subprocess.STDOUT,check=True)
         file=next((out/'ImpactProgram').glob(GUID+'*'))
         with (out/'disassembly.log').open('w') as log:
@@ -313,7 +397,7 @@ def main():
             .replace('fire_45 = { enabled = false','fire_45 = { enabled = true')
         apply(fire_config);p,out=export('fire-enabled')
         old=baseline.code;new=p.code[:len(old)]
-        for offset in (0,1,89,211): new[offset]=old[offset]
+        for offset in (0,1,39,40,89,211,221): new[offset]=old[offset]
         assert new==old and p.p['data'][:len(baseline.p['data'])]==baseline.p['data']
         assert p.layout[:len(baseline.layout)]==baseline.layout
         for guid in TEMPLATES:
@@ -334,10 +418,24 @@ def main():
         assert len(FireVM(single,tier=45).execute().burn_ticks)==10
         results.append('enabling only fire45 leaves disabled fire tiers and their templates untouched')
         apply(only45.replace('ground_fire_enabled = false','ground_fire_enabled = true'))
-        ground_program,_=export('fire-ground-enabled')
+        ground_program,ground_dir=export('fire-ground-enabled')
         ground_vm=FireVM(ground_program).execute()
         assert len(ground_vm.ground_visuals)==1 and ground_vm.ground_destroyed==[5000]
         results.append('ground options compile from uploaded config and execute without test overrides')
+        gv=FireVM(ground_program,positions={11:41,12:80},moves={3:{12:(42,0,0)}}).execute(ground_hit=True)
+        assert {e for _,e,_ in gv.burn_ticks}=={11,12}
+        assert gv.ground_visuals==[(0,(40,0,0))] and gv.ground_destroyed==[5000]
+        assert not gv.hits and 0 not in {e for _,e,_ in gv.ignitions}
+        results.append('terrain collision uses actual contact transform, ignites nearby and entering enemies, no direct terrain damage')
+        gv=FireVM(ground_program,positions={11:80},moves={20:{11:(41,0,0)}}).execute(ground_hit=True)
+        assert gv.burn_ticks and min(t for t,_,_ in gv.burn_ticks)>=2500
+        results.append('an empty ground impact remains active until a later enemy enters')
+        for tier in (15,28):
+            gv=FireVM(ground_program,tier=tier).execute(ground_hit=True)
+            assert not gv.ground_visuals and not gv.burn_ticks
+        assert not FireVM(single).execute(ground_hit=True).ground_visuals
+        results.append('disabled tiers and ground_fire_enabled=false retain the vanilla terrain path')
+        results.extend(check_zone(ground_program,ground_dir,base_dir))
         # Full mix must compile within BOTH actual 16-bit native limits.
         apply(defaults.replace('enabled = false','enabled = true').replace('targets_per_spread = 1','targets_per_spread = 3'))
         mixed,_=export('fire-mixed-enabled')

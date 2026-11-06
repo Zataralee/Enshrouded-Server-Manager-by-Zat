@@ -1,37 +1,50 @@
-Zat Shock Tuning 0.4.0-alpha.2 validation - 2026-10-22
+COMBINED MOD 0.5.0-alpha.1 - 2026-11-06
+Supports game revisions 1273043, 1285601 and 1287369. Other revisions remain
+rejected. Original resource, bytecode and layout guards remain in place.
+The optional fire_effects section integrates all former companion selections.
+Existing gameplay settings and vanilla defaults retain their meaning. Selected
+visuals with no active ground-fire profile are logged and skipped, not rejected.
+The accompanying validation JSON records checks of this exact upload ZIP.
+Native multiplayer combat and client rendering still require in-game testing.
 
-FIRE-ARROW FIX AND GROUND FIRE
-Regression imports the shipped alpha.1 ZIP and reproduces zero burn ticks on the
-original victim and one tiny tick on a secondary. Native ApplyDamage reflection
-says ignoreConsecutiveHits ignores entities already hit; disassembly confirms the
-history gate. Alpha.2 uses false for ticks. The old model incorrectly assumed true
-bypassed filtering and did not record the original hit; both errors are fixed.
+Reproduction: the server's 2026-11-06 20:38 UTC EML run passed the revision-1287369
+Shock Tuning baseline but the companion rejected all-disabled ground hooks.
+The combined validator exercises this configuration, its successful native
+startup, the supplied migrated config, all 16 switches, combinations, and native
+startup with every visual selected. It also checks old configs, inactive/zero
+settings, duration and alias behavior, cleanup and shared-damage overflow.
+Earlier results below describe development history, not a new combat claim.
 
-Ground tests cover late entrants, fixed origin, expiry, independent entrant burn,
-shared target budget, Soaked exclusion, visual-only scale, shooter loss and shutdown.
-The client-known visual reference is checked against its native non-saving,
-non-combat template. Tests assert upright transform/scale and owned cleanup.
-Official EML 0.2.0 package import/apply/export/restore in the marked disposable
-revision-1273043 dedicated-server fixture. Default and old configs without the
-fire section produce no fire patches. Enabled fire templates change only the
-server lifetime/watchdog gate. Original shared arrow code/data/layout are kept
-except the existing entry and pre/post-hit branch trampolines. The native visual
-buffs are checked to remain visual-only; their shared resources are not edited.
+Zat Shock Tuning 0.4.0-alpha.3 validation - 2026-10-23
 
-42 fire-specific checks cover fire-only damage inputs, independent tiers,
-initial area, nearest living/hostile selection, 3D fan-out, per-victim delays,
-no duplicate ignition at zero damage, partial ticks and tick-frequency-invariant
-modeled totals, native uint32 timer rollover/full range, Soaked/death/logout,
-miss cleanup, independent fire/shock execution and exact last-slot ledger copies.
-All-on code/data fit the native 16-bit limits. Invalid/overflowing config values
-are rejected. Restoration verifies the original game index byte for byte.
-Existing scalar, arrow-damage and lightning-fanout regression suites also run.
+INCENDIARY GROUND FIRE
+The real EML upload is applied/exported/restored against the marked disposable
+revision-1273043 server fixture. Tests execute the emitted bytecode, not a separate
+implementation of propagation. Native combat and VFX rendering remain unverified.
 
-The damage assertions verify argument plumbing with MODELED native calls, NOT
-actual native bow-perk arithmetic, immunity, multiplayer authority, visual
-replication or health loss. No live combat test has been performed. Native
-startup is checked separately on loopback with a fresh save and random password.
+Ground impacts use the collision world transform; ground-enabled tiers calculate
+the same shot coefficient without invoking direct terrain damage. Tests cover
+empty ground, immediate and late entrants, disabled tiers, stationary enemy-hit
+areas, independent victim timers, expiry, logout and shutdown cleanup.
+
+The construct incendiary template retains its original VFX, audio, parameters,
+collider and native damage configuration. Only its server LifeTime is replaced
+with a guarded watchdog. Its shared Impact program bypasses native buffs only
+for zones parented to marked fire arrows. Tests assert zero native buffs for these
+zones past nine seconds, original burns and nine-second expiry for ordinary
+construct grenades, and no watchdog for other grenade templates. Baseline code,
+data and layout are guarded; ordinary body instructions remain intact except
+entry/wait trampolines. Custom marker tags are server classification data, not new
+client visuals. Full program branches, operands and stack joins are checked.
+
+Burn ticks use neutral material feedback with existing shot fire/coefficient,
+weapon/category/scaling inputs. The shipped alpha.1 repeat-hit regression remains
+covered. Existing fire timing/fanout/ledger/uint32 checks and scalar/lightning
+regressions remain in the validation suite. Native startup is tested separately
+on loopback with a fresh disposable save; it does not exercise combat.
+
 No production server, installed client or user save is changed by validation.
+Known mine/trap targeting and Shroud propagation reports remain unresolved.
 
 COMBAT ACCEPTANCE FOR THIS ALPHA
 1. Start with fire45 only, initial_radius=0 and targets_per_spread=0: confirm normal
@@ -48,8 +61,10 @@ COMBAT ACCEPTANCE FOR THIS ALPHA
 5. Enable ground fire: move an untouched enemy into the initial radius after
    impact. Confirm a full burn, no repeat ignition, flames disappearing at expiry,
    and no ignition from entering after expiry. Test slopes, enemy movement/death,
-   a second unmodified client, shooter logout and repeated arrows. The native
-   bonfire footprint is approximate; replication/scaling are NOT yet verified.
+   a second unmodified client, shooter logout and repeated arrows. The incendiary
+   footprint is approximate; replication/scaling are NOT yet verified. Also shoot
+   bare ground with no enemy present, then bring one into the area. Verify normal
+   construct grenades still burn and that only one damage system runs per area.
 6. Retest normal/disabled arrows and lightning. Apply a saved config through ESM,
    restart and confirm it is consumed. Disable/remove and apply to restore.
 

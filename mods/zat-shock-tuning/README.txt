@@ -1,6 +1,60 @@
-Zat Shock Tuning 0.4.0-alpha.2 - ETERNAL FIRE ARROW IGNITION AND SPREADING BURNS
+Zat Shock & Fire Tuning 0.5.0-alpha.1 - COMBINED MOD
 
-BURN DAMAGE FIX AND LINGERING GROUND FIRE (EXPERIMENTAL SERVER TEST)
+ONE MOD, ONE CONFIG
+Includes all former Fire Effect Lab visuals in this ZIP. Do not enable the old
+zat-fire-effect-lab companion alongside it. The mod ID remains zat-shock-tuning.
+Supports game revisions 1273043, 1285601 and 1287369 with the existing resource
+and bytecode guards. All shipped defaults preserve vanilla gameplay.
+
+UPGRADE THROUGH ESM-Z
+1. Stop the server and copy both existing mods' src/config.lua files.
+2. Remove Fire Effect Lab, then the old Shock Tuning entry. Removal deletes that
+   mod's saved config, so keep your copies before removing it.
+3. Upload this ZIP and enable it. Configure > File > src/config.lua is the one
+   active config. src/config.defaults.lua is a backup; do not edit it to tune.
+4. Restore your main tuning settings. Move the old lab's burn_time_ms,
+   visual_scale and effects table into the new fire_effects section. Do not copy
+   the lab's return statement or schema_version into that section.
+5. Save, Apply & Validate Mods, then start when ready. No machine access needed.
+
+Old main configs without fire_effects are accepted with visual overrides off.
+The separately supplied your-config.lua preserves the settings inspected on
+Pathfinders and enables fire_45.ground_fire_enabled so the selected dragon
+germination visual can run. It retains the lab's 10000 ms time and scale 3.
+This custom config is not the package default.
+
+INTEGRATED FIRE VISUALS
+Set any or all fire_effects.effects entries true. All 16 former switches remain;
+aliases are deduplicated into 12 distinct native visuals. They add no native
+explosion, buff damage or terrain changes. Damage still comes from fire_arrows.
+
+For a fire-arrow tier to use the selected visuals, enabled and ground_fire_enabled
+must be true, and chance_percent, initial_radius, burn_duration_ms and
+ground_fire_duration_ms must be positive. Inactive settings are logged and
+skipped; saving a visual selection while ground fire is off no longer prevents
+other tuning or server startup. Fire switches are never silently turned on.
+
+When a selection is active, fire_effects.burn_time_ms controls both ground and
+victim burn duration for the active ground tiers, and fire_effects.visual_scale
+sets their native visual size. Shared time 0 or all switches false restores the
+ordinary per-tier durations and incendiary visual. A fire tier without ground
+fire keeps its own duration. The shared time can therefore change total damage;
+burn_damage_multiplier_per_second remains the damage rate.
+
+The shared size is independent of initial_radius, which controls gameplay area.
+A one-shot particle animation may finish before the entity's lifetime; the mod
+does not repeatedly replay explosions to fake continuing flames. Attached enemy
+effects may still need their original joints or phases to render as expected.
+No balance caps were added; numeric checks enforce storage representability.
+
+See the accompanying validation JSON for checks of this exact upload ZIP.
+Native multiplayer combat and visual appearance still require in-game testing.
+
+INCENDIARY GROUND FIRE (EXPERIMENTAL SERVER TEST)
+Alpha.3 uses the construct incendiary-grenade flame zone and supports terrain
+impacts as well as enemy hits. Burn ticks use neutral hit feedback instead of
+replaying the arrow impact material. No new config keys are required.
+
 Alpha.1 set ignoreConsecutiveHits=true, which tells the engine to SKIP enemies
 already hit. Alpha.2 sets it false for burn ticks. The explicit ignition ledger
 still prevents repeated ignition. Your original damage settings can be retained.
@@ -32,9 +86,10 @@ Configure > src/config.lua, under fire_arrows, example:
     },
 The fire_15 and fire_28 profiles have exactly the same settings.
 
-chance_percent is one roll after a successful, unblocked enemy hit. max_jumps
+chance_percent is one roll after a successful, unblocked enemy hit, or one
+terrain collision when ground fire is enabled. max_jumps
 counts ALL additional ignitions, including initial-area victims, excluding the
-original enemy. 0 removes the configured budget. targets_per_spread = 0 disables
+original enemy. For terrain impacts every ignition counts. 0 removes the configured budget. targets_per_spread = 0 disables
 later propagation but keeps initial-area ignition. initial_radius = 0 limits the
 first ignition to the struck enemy; spread_radius = 0 disables later spread.
 burn_duration_ms = 0 disables the burn entirely. Tick/delay 0 means next engine
@@ -43,28 +98,43 @@ cannot propagate after it expires. Recommendations are not balance caps.
 
 LINGERING GROUND FIRE
 Optional per tier, disabled by default and when omitted from an old config.
-ground_fire_enabled=true creates an ignition area at the initial victim's saved
-feet/root position, using initial_radius and ground_fire_duration_ms. It remains
+ground_fire_enabled=true creates an ignition area at a terrain collision point
+or the initial victim's saved feet/root position, using initial_radius and
+ground_fire_duration_ms. It remains
 stationary and checks for new living hostile, non-Soaked enemies each update.
 Each entrant receives a full independent burn using that arrow's existing damage,
 timing and spread settings; it can spread onward. Existing victims are not refreshed
 or re-ignited by this same arrow. Entrants share max_jumps and the retained ledger.
 No instant explosion or separate damage multiplier is added. Zero ground duration
-or initial radius disables the area. A missed/blocked arrow does not create it.
+or initial radius disables the area. A blocked enemy hit or an arrow that never
+collides does not create it. A terrain hit creates it even with no nearby enemy.
 
-A client-known bonfire visual marks the area. Its horizontal transform scale is
-initial_radius * ground_fire_visual_scale; height stays at native scale. A visual
-scale of zero hides the flame without disabling ignition. This is an approximate
-visual footprint, not an exact radius outline. The effect is anchored at the first
-victim's feet, not terrain-conforming: hills, stairs and flying enemies can produce
-clipping or floating flames. Native client replication/scaling needs live testing.
-The area uses the same 3D sphere query as initial ignition, not a ground collision
-mesh or line-of-sight raycast. It cannot spread fire to buildings or terrain.
+The client-known construct incendiary-grenade zone marks the area. Horizontal
+scale is initial_radius / 1.5 * ground_fire_visual_scale, using its native 1.5-unit
+radius as the reference; height stays native. Zero hides the visual without
+disabling ignition. Actual rendered coverage/replication still needs live testing.
+Enemy-hit placement uses feet/root; terrain-hit placement uses the collision's
+world transform. This is not terrain-conforming: slopes, stairs, walls and flying
+enemies can produce floating or clipped flames. The area remains a 3D sphere,
+not a terrain mesh or line-of-sight raycast. No buildings or terrain are burned.
 
-Ground expiry removes the visual and stops new entrants; existing enemy burns
-finish independently. Shooter disappearance and Impact shutdown remove the visual.
-The spawned visual is DoNotSave, linked to the arrow for despawn, and has no combat
-program/collider. No shared bonfire template or global fire buff is changed.
+The zone's original client VFX/audio resources and parameters stay unchanged.
+A server-side marker on enabled arrows identifies their child zones. These zones
+skip the grenade's native buff program: only the arrow controller applies damage.
+Ordinary construct grenades keep native burns; their nine-second server lifetime
+is reproduced by a checked Impact watchdog. Other grenade templates retain their
+existing engine lifetime. This guards against doubled burn damage while using
+an existing template that unmodified clients already know.
+
+Ground expiry removes the zone and stops new entrants; existing burns finish
+independently. Shooter disappearance and Impact shutdown also remove the zone.
+It is non-saving and linked to its arrow. No new client assets are distributed.
+
+KNOWN TEST REPORTS STILL OPEN
+The previously reported mine/trap targeting and Shroud spread failure have not
+been fixed in this build. This build changes ground ignition and visuals, not
+candidate eligibility. Do not treat the modeled tests as proof those bugs are fixed.
+
 
 FIRE DAMAGE AND BOW BONUSES
 burn_damage_multiplier_per_second scales the shot's FIRE component per second.
@@ -109,7 +179,8 @@ EXISTING LIGHTNING AND SCALAR FEATURES
 
 This build implements nearest-first branching for eternal lightning arrows
 (levels 20/36/45) and an opt-in replacement for propagation in the five player
-chain-lightning spells. Requires upstream EML 0.2.0 and game revision 1273043.
+chain-lightning spells. Requires upstream EML 0.2.0; supported game revisions are
+1273043, 1285601 and 1287369.
 Defaults leave the new behavior disabled and preserve vanilla gameplay.
 
 PROPAGATION

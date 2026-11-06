@@ -1,0 +1,27 @@
+CURRENT COMPATIBILITY UPDATE - 2026-11-06
+Supports game revisions 1273043, 1285601 and 1287369. Other revisions remain
+rejected. Original resource, bytecode and layout guards remain in place.
+Configuration keys, defaults and gameplay behavior are unchanged.
+The accompanying validation JSON records checks of this exact upload ZIP.
+Native multiplayer combat and client rendering still require in-game testing.
+
+Validation is performed by mods/validate_fire_effect_lab.py against a marked,
+disposable dedicated-server fixture. Results accompany the ZIP as validation JSON.
+Parser export, bytecode structure checks, execution models and isolated server
+startup do not establish visible effects or successful unmodified-client combat.
+
+Manual acceptance:
+- Upload alongside the main mod, configure from ESM only, apply and restart.
+- All false reproduces the main mod's existing behavior.
+- Each unique candidate and combinations (including all true): ground hit, target hit, disappearance after configured
+  lifetime, shooter logout, repeated shots, and an unmodified second client.
+- Test at least two different burn_time_ms values on a looping ground candidate.
+- Confirm no native explosion/terrain damage or native extra DoT from previews.
+- Compare ordinary enemy attacks/throwables with the test disabled/enabled.
+- Record invisible/short-lived attached and one-shot candidates as such; do not
+  mistake a configured entity lifetime for a verified continuous particle loop.
+- Disable the companion, apply and restart; original config and behavior return.
+
+Alpha.2 adds combination execution models for all 16 switches/12 unique visuals,
+shared-program leader/sibling gating, no recursive respawning, common transform,
+parent despawn linkage, duration/early cleanup, and exact all-false restoration.

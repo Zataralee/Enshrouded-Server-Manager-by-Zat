@@ -1,0 +1,13 @@
+{
+  "id": "zat-fire-effect-lab",
+  "name": "Zat Fire Effect Lab - Companion Test",
+  "version": "0.1.0-alpha.4",
+  "capabilities": [
+    "patch"
+  ],
+  "authors": [
+    "Zataralee"
+  ],
+  "license": "MIT",
+  "description": "Combinable native fire visual previews on eternal fire arrows. Requires enabled Zat Shock Tuning 0.4.0-alpha.5 with fire-arrow ground fire enabled."
+}

@@ -105,6 +105,7 @@ function M.plan(settings, api, fire_settings)
         end
         lifetimes[#lifetimes+1]={template=template,components=remaining,config=config_values}
     end
+    local ground_apply=require("ground_fire").plan(fire_active,api)
     fire.prepare(b,fire_active,api)
     local storage_profiles=active
     if #fire_active>0 then
@@ -127,6 +128,29 @@ function M.plan(settings, api, fire_settings)
     b.uless("flight_elapsed","flight_limit");b.branch(9,"flight_return")
     b.emit(29,30)
     b.mark("flight_return");b.emit(p.code[1],p.code[2],8,2)
+    local collision,ground
+    if #fire_active>0 then
+        collision=#b.code
+        b.call("ForEachCollisionInStream",{"SameRoot::eventStream","ForEach::index",false,
+            "ForEach::isCombatTarget",false,"ForEach::materialId","fire_impact_transform",
+            "ForEach::normal","ForEach::position",false,"ForEach::otherEntity"},3996774287)
+        b.emit(8,60)
+        ground=#b.code
+        for _,a in ipairs(fire_active) do
+            local s=a.config
+            if s.ground_fire_enabled and s.ground_fire_duration_ms>0 and s.initial_radius>0 then gate(a,a.key.."_ground_hit") end
+        end
+        b.emit(8,92)
+        for _,a in ipairs(fire_active) do
+            b.mark(a.key.."_ground_hit")
+            b.emit(13);b.save("fire_ground_hit")
+            b.copy("fire_impact_transform","origin")
+            -- Same native random/coefficient calculation as an enemy hit, without
+            -- applying direct damage to terrain. Burn keeps the shot's bow scaling.
+            for i=95,136 do b.emit(p.code[i]) end
+            b.branch(8,a.key.."_fire_start")
+        end
+    end
     local pre=#b.code
     for _,a in ipairs(all_active) do gate(a,"capture") end
     b.emit(8,94)
@@ -147,7 +171,8 @@ function M.plan(settings, api, fire_settings)
     for _,a in ipairs(active) do propagation.emit(b,a,context) end
     propagation.finish(b);b.emit(8,191)
     fire.emit(b,fire_active,api)
-    b.finish();b.code[1]=8;b.code[2]=flight;b.code[90]=pre;b.code[212]=post
+    b.finish();if collision then b.code[40]=8;b.code[41]=collision;b.code[222]=ground end
+    b.code[1]=8;b.code[2]=flight;b.code[90]=pre;b.code[212]=post
     return {label="arrow_chain.nearest_fanout_program",before=0,after=#all_active,apply=function()
         print("[Zat Shock Tuning] Arrow frontier native storage: "..b.capacity.." pending spreaders; slots are reused")
         if b.fire_capacity then print("[Zat Shock Tuning] Fire ignition ledger native storage: "..b.fire_capacity.." unique victims per shot (includes first); full ledgers stop spreading and finish existing burns") end
@@ -161,6 +186,7 @@ function M.plan(settings, api, fire_settings)
             v.config.simple=values
             v.template.components=v.components
         end
+        ground_apply()
     end}
 end
 return M

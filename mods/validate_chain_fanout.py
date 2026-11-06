@@ -58,7 +58,7 @@ def main():
         apply(defaults);a0,s0,seq0=export('fanout-baseline')
         config=defaults.replace('enabled = false','enabled = true').replace('targets_per_spread = 1','targets_per_spread = 3')
         apply(config);a,s,seq=export('fanout-enabled')
-        for old,new,offsets in [(a0,a,[0,1,89,211]),(s0,s,[94,276])]:
+        for old,new,offsets in [(a0,a,[0,1,39,40,89,211,221]),(s0,s,[94,276])]:
             code=new.code[:len(old.code)]
             for offset in offsets: code[offset]=old.code[offset]
             assert code==old.code

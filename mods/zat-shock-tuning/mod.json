@@ -1,11 +1,11 @@
 {
   "id": "zat-shock-tuning",
-  "name": "Zat Shock Tuning - Server Test",
-  "version": "0.4.0-alpha.2",
+  "name": "Zat Shock & Fire Tuning - Server Test",
+  "version": "0.5.0-alpha.1",
   "capabilities": [
     "patch"
   ],
-  "description": "Configurable eternal fire-arrow spreading burns and lingering ground ignition, with corrected damage ticks, plus shock and spell tuning. Experimental server test; combat validation required.",
+  "description": "One configurable EML mod for chain lightning, eternal-arrow burns, lingering ground fire and combinable native fire visuals. Experimental server test; multiplayer validation required.",
   "authors": [
     "Zataralee"
   ],

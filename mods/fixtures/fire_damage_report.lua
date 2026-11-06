@@ -1,4 +1,4 @@
--- Zat Shock Tuning 0.4.0-alpha.2. Edit through ESM-Z > Mods > Configure.
+-- Zat Shock Tuning 0.4.0-alpha.3. Edit through ESM-Z > Mods > Configure.
 -- Stop the server, save, Apply & Validate Mods, then start the server.
 -- Your supplied tuning is preserved. Ground fire is enabled for fire_45 for 10 seconds.
 -- config.defaults.lua in the ZIP remains the vanilla-preserving backup.
@@ -71,9 +71,9 @@ return {
     },
     fire_arrows = {
         -- EXPERIMENTAL: initially disabled. Each tier is independent.
-        -- ground_fire_enabled: linger at the initial radius and ignite new entrants.
+        -- ground_fire_enabled: ground/enemy hits create a lingering ignition area.
         -- ground_fire_duration_ms: ground lifetime, independent of each victim burn.
-        -- ground_fire_visual_scale: horizontal bonfire size multiplier (0 hides it).
+        -- ground_fire_visual_scale: horizontal incendiary flame size multiplier (0 hides it).
         -- Visual footprint is approximate; test slopes/replication in multiplayer.
         -- One ignition per enemy per arrow; ground entrants share max_jumps/ledger.
         -- Normal arrow impact stays intact. Ignition adds NO instant blast.
