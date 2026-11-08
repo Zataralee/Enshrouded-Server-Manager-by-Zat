@@ -2,6 +2,15 @@
 
 ## Current Release
 
+**v0.9.6.7a stable / v0.9.6.7b beta** - 2026-11-08
+
+- Added selectable Mods permission to account creation, account editing and invite profiles. Ordinary users can manage mods on assigned servers after an admin grants access.
+- Enabled Mods for existing and new admins and server owners, including owner invitations. A one-time migration preserves subsequent explicit owner revocations and all server assignments.
+- Enforced permission and exact server authorization on every mod read and write. Preserved stopped-server, cross-origin, upload validation and global EML updater admin protections.
+- Added Windows CI for backend, UI, permission and updater regressions. Both Windows channels include EML; Linux remains separate.
+
+### Previous release
+
 **v0.9.6.6a stable / v0.9.6.6b beta** - 2026-11-06
 
 - Added six-hour upstream EML release checks and administrator check/install/rollback controls. Verified installations preserve the old tool, source/license and mod configurations. Running game servers are unaffected. See [EML Updates](EML_UPDATES.md).

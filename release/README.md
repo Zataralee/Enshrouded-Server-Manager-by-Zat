@@ -1,8 +1,8 @@
 # Current Release
 
-Current package: `ESM-Z-PythonRequired-v0.9.6.6a.zip`
+Current package: `ESM-Z-PythonRequired-v0.9.6.7a.zip`
 
-Compatibility asset: `EnshroudedServerManager-PythonRequired-v0.9.6.6a.zip`
+Compatibility asset: `EnshroudedServerManager-PythonRequired-v0.9.6.7a.zip`
 
 The full stable release includes optional EML integration. Mods must be EML-compatible, self-contained Lua patch mod ZIPs; see `docs/EML_MODS.md`. Older EML beta users should follow `docs/BETA_CHANNEL.md` to switch channels with mods preserved.
 

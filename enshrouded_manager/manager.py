@@ -27,9 +27,19 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
 
-APP_VERSION = "0.9.6.6a"
+APP_VERSION = "0.9.6.7a"
 UPDATE_RESTART_PROTOCOL = 1
 UPDATE_LOG = [
+    {
+        "version": "0.9.6.7a",
+        "date": "2026-11-08",
+        "changes": [
+            "Added selectable Mods permission to manager accounts and invite profiles.",
+            "Enabled Mods for existing and new admins and server owners; later owner permission changes persist.",
+            "Scoped mod reads, uploads, configuration and actions to assigned or owned servers, rejecting unauthorized server IDs.",
+            "Kept global EML tool updates admin-only and preserved stopped-server and same-origin protections.",
+        ],
+    },
     {
         "version": "0.9.6.6a",
         "date": "2026-11-06",
@@ -331,7 +341,7 @@ KNOWN_WORLD_IDS = [
     "32d84e52",
     "33d84fe5",
 ]
-ALL_PERMISSIONS = ["setup", "control", "settings", "accounts", "logs", "saves", "backups"]
+ALL_PERMISSIONS = ["setup", "control", "settings", "accounts", "mods", "logs", "saves", "backups"]
 WEBHOOK_EVENTS = {
     "server.started": "Server started",
     "server.stopped": "Server stopped",
@@ -540,11 +550,16 @@ def default_instance(name, path):
 
 def default_user(username, password, role="user", permissions=None, assigned_instance_ids=None, must_change_password=True):
     salt = secrets.token_hex(16)
+    permissions = list(permissions or [])
+    if role == "admin":
+        permissions = list(ALL_PERMISSIONS)
+    elif role == "server_owner" and "mods" not in permissions:
+        permissions.append("mods")
     return {
         "id": slugify(username) or secrets.token_hex(4),
         "username": username,
         "role": role,
-        "permissions": permissions or [],
+        "permissions": permissions,
         "assigned_instance_ids": assigned_instance_ids or [],
         "steam_name": "",
         "steam_email": "",
@@ -1270,6 +1285,18 @@ def migrate_config(cfg):
             if key not in user:
                 user[key] = value
                 changed = True
+    # Grant the new default once; later explicit owner revocations must persist.
+    if not cfg.get("mods_permission_migrated"):
+        records = (cfg.get("users", []) + list(cfg["invite_profiles"].values())
+                   + cfg.get("invite_codes", []))
+        for record in records:
+            if record.get("role") in {"admin", "server_owner"}:
+                granted = list(record.get("permissions", []))
+                if "mods" not in granted:
+                    granted.append("mods")
+                    record["permissions"] = granted
+        cfg["mods_permission_migrated"] = True
+        changed = True
     if "instances" not in cfg:
         cfg["instances"] = []
         changed = True
@@ -1369,7 +1396,21 @@ def can_manage_invites(user):
 
 
 def has_permission(user, permission):
-    return is_admin(user) or permission in set(user.get("permissions", []))
+    return bool(user and (is_admin(user) or permission in set(user.get("permissions", []))))
+
+
+def mods_instance_for_user(user, instance_id=None):
+    require_permission(user, "mods")
+    visible = visible_instances_for_user(user)
+    if instance_id:
+        for inst in visible:
+            if inst["id"] == instance_id:
+                return inst
+        raise PermissionError("This server is not assigned to your account")
+    if not visible:
+        raise PermissionError("No server is assigned to your account")
+    wanted = config().get("selected_instance_id")
+    return next((inst for inst in visible if inst["id"] == wanted), visible[0])
 
 
 def visible_instances_for_user(user):
@@ -1744,6 +1785,7 @@ def update_manager_user(user_id, patch):
                 raise ValueError("Username is already in use")
             target["username"] = wanted
         if "role" in patch:
+            previous_role = target.get("role")
             target["role"] = patch["role"] if patch["role"] in {"admin", "server_owner"} else "user"
             if target["role"] == "admin":
                 target["permissions"] = ALL_PERMISSIONS
@@ -1758,6 +1800,8 @@ def update_manager_user(user_id, patch):
             if "assigned_instance_ids" in patch:
                 valid = {inst["id"] for inst in cfg.get("instances", [])}
                 target["assigned_instance_ids"] = [item for item in patch["assigned_instance_ids"] if item in valid]
+        if "role" in patch and target["role"] == "server_owner" and previous_role != "server_owner":
+            target["permissions"] = list(dict.fromkeys([*target.get("permissions", []), "mods"]))
         save_json(MANAGER_CONFIG, cfg)
     return user_public(target)
 
@@ -3839,10 +3883,10 @@ class Handler(SimpleHTTPRequestHandler):
                         return
                     return self.send_json(eml_updater().status())
                 if route.path in {"/api/mods", "/api/mods/config", "/api/mods/log"}:
-                    if not self.require_admin():
+                    if not self.require_perm("mods"):
                         return
                     qs = parse_qs(route.query)
-                    inst = get_instance_for_user(self.current_user(), qs.get("instance_id", [None])[0])
+                    inst = mods_instance_for_user(self.current_user(), qs.get("instance_id", [None])[0])
                     eml = eml_for_instance(inst["id"])
                     if route.path == "/api/mods/log":
                         return self.send_json({"error": "Use Logs or Download EML Log to download the complete file."}, HTTPStatus.GONE)
@@ -3961,7 +4005,9 @@ class Handler(SimpleHTTPRequestHandler):
                     return self.send_json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
                 return self.send_json(result)
             if route.startswith("/api/mods/"):
-                if not self.require_admin():
+                if not self.require_auth():
+                    return
+                if not self.require_perm("mods"):
                     return
                 origin = self.headers.get("Origin")
                 if origin and urlparse(origin).netloc != self.headers.get("Host"):
@@ -3985,7 +4031,7 @@ class Handler(SimpleHTTPRequestHandler):
                     instance_id = body.get("instance_id")
                 if not instance_id:
                     raise ValueError("Select a server first")
-                inst = get_instance_for_user(self.current_user(), instance_id)
+                inst = mods_instance_for_user(self.current_user(), instance_id)
                 sup = supervisor(inst["id"])
                 with sup.lock:
                     if sup.status()["running"]:

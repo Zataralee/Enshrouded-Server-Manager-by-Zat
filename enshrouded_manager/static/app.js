@@ -23,7 +23,7 @@ let activeInstanceId = localStorage.getItem("esm_active_instance_id") || "";
 let discoveredSaves = [];
 let uploadedSaveFiles = [];
 let uploadedSaveWorlds = [];
-const permissions = ["setup", "control", "settings", "accounts", "logs", "saves", "backups"];
+const permissions = ["setup", "control", "settings", "accounts", "mods", "logs", "saves", "backups"];
 
 function selectedInstance() {
   return state.selected_instance || {};
@@ -1011,12 +1011,14 @@ function renderInstructions() {
       <p>Use password reset when a user cannot sign in. Admins can also create and edit manager accounts directly.</p>
     `));
   }
-  if (isAdmin()) {
+  if (can("mods")) {
     parts.push(instructionSection("EML Mods", `
-      <p>EML is included in the stable release. Open Server Setup &amp; Config &gt; Mods (EML) as an administrator and stop the selected server before changing mods.</p>
+      <p>Open Server Setup &amp; Config &gt; Mods (EML) and stop the selected server before changing mods. Mods permission applies only to your assigned or owned servers. Admins and new server owners receive it by default.</p>
       <p>Upload only self-contained EML-compatible Lua patch mod ZIPs containing mod.json and src/mod.lua. Check the author's EML, game-version and client/server requirements.</p>
-      <p>Enable EML, upload and enable the mod, then Apply &amp; Validate Mods. Download EML Log saves the complete patch log to this computer.</p>
+      <p>Enable EML, upload and enable the mod, then Apply &amp; Validate Mods. Download EML Log requires Logs permission. Global EML tool updates require an administrator.</p>
     `));
+  }
+  if (isAdmin()) {
     parts.push(instructionSection("Manager", `
       <p>Admins can configure manager access, listen address, web UI port, storage roots, backup limits, crash restart behavior, launch behavior, and FTP backup settings.</p>
       <p>Admins can also limit how many servers each server owner may create and how long a server owner must wait between server creations.</p>
@@ -1659,6 +1661,8 @@ document.querySelector("#passwordForm").addEventListener("submit", async event =
 document.querySelector("#newUserForm").addEventListener("submit", async event => {
   event.preventDefault();
   const body = Object.fromEntries(new FormData(event.target).entries());
+  body.permissions = event.target.querySelector('[name="mods"]').checked ? ["mods"] : [];
+  delete body.mods;
   await api("/api/users/create", { method: "POST", body: JSON.stringify(body) });
   event.target.reset();
   toast("User created");

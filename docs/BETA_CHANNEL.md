@@ -1,5 +1,25 @@
 # Stable and beta channels
 
+## Mods permission update: 0.9.6.7a/b
+
+Sign in as an administrator, open **Manager**, keep **Run beta version** set to
+your current channel, then click **Check for Updates** and **Download, Install &
+Restart**. Confirm and keep the progress dialog open until reconnection. Verify
+**0.9.6.7a** (stable) or **0.9.6.7b** (Windows beta) in the header.
+
+Under **Account > Users**, select **mods** for ordinary users and assign their
+servers, then save the account. Existing admins and owners receive Mods on first
+upgrade. New admins and owners receive it by default. Existing sessions pick up
+permission changes on their next request. Refresh the browser to update tab visibility.
+Server owners retain their existing server scope; no additional servers are assigned.
+The manager update preserves game-server processes, accounts, sessions and mod data.
+No game-server restart is required to enable this permission. Mod changes still
+require a stopped selected server. Global EML tool updates remain admin-only.
+
+An older 0.9.6.3b manager can remain on beta and install 0.9.6.7b directly. If you
+then want stable, uncheck beta and install 0.9.6.7a. Both include EML. The older
+bridge instructions below remain applicable when using historical release packages.
+
 **EML integration is included in the full Windows stable release from 0.9.6.5a.**
 Beta is no longer required for EML mods. Both current channels include the same
 EML functionality and complete log downloads. Mods must be **EML-compatible,

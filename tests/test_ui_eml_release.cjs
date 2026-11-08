@@ -17,7 +17,7 @@ test('EML download stays separate from mutations and follows the selected server
   };
   vm.runInNewContext(source,{
     document:{getElementById:get,addEventListener(){}},window:{addEventListener(){}},
-    state:{server:{running:true}},isAdmin:()=>true,selectedInstanceId:()=>selected,escapeHtml:s=>s,
+    state:{server:{running:true}},can:()=>true,selectedInstanceId:()=>selected,escapeHtml:s=>s,
     toast(){},confirm:()=>true,setInterval(callback){refresh=callback;},
     api:async url=>{requests.push(url);return {installed:true,enabled:true,log_available:true,version:'0.2.0',mods:[]};}
   });
