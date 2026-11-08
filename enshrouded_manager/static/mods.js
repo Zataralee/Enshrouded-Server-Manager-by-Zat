@@ -1,4 +1,4 @@
-/* Admin-only controls for the selected dedicated server's upstream EML adapter. */
+/* Permission-scoped controls for the selected dedicated server's EML adapter. */
 (() => {
   const element = id => document.getElementById(id);
   let snapshot = {}, busy = false, selected = "", editor = null, editingDirty = false;
@@ -6,12 +6,12 @@
   const modQuery = () => `${query(editor.instanceId)}&mod_id=${encodeURIComponent(editor.modId)}`;
 
   function controls() {
-    const stopped = selected && !state.server?.running && !busy && isAdmin();
+    const stopped = selected && selected === selectedInstanceId() && !state.server?.running && !busy && can("mods");
     element("emlToggle").disabled = !stopped;
     element("emlApply").disabled = !stopped || !snapshot.enabled;
     element("modUploadButton").disabled = !stopped;
     element("modConfigSave").disabled = !stopped || editor?.instanceId !== selected;
-    const hasLog = selected && selected === selectedInstanceId() && snapshot.log_available;
+    const hasLog = can("mods") && can("logs") && selected && selected === selectedInstanceId() && snapshot.log_available;
     element("emlLog").setAttribute("aria-disabled", String(!hasLog));
     element("emlLog").classList.toggle("disabled", !hasLog);
     if (hasLog) element("emlLog").setAttribute("href", `/api/logs/download?log_id=server%3Aesm-eml.log&${query(selected)}`);
@@ -21,7 +21,15 @@
   }
 
   async function refreshMods() {
-    if (!element("mods").classList.contains("active") || !isAdmin() || busy) return;
+    if (!can("mods")) {
+      snapshot = {}; editor = null; editingDirty = false;
+      element("modEditor").classList.add("hidden");
+      element("modConfigText").value = "";
+      element("modList").replaceChildren();
+      controls();
+      return;
+    }
+    if (!element("mods").classList.contains("active") || busy) return;
     const instanceId = selectedInstanceId() || "";
     if (selected !== instanceId) {
       selected = instanceId;
@@ -39,7 +47,7 @@
     }
     try {
       const result = await api(`/api/mods?${query(instanceId)}`);
-      if (instanceId !== selectedInstanceId() || busy) return;
+      if (instanceId !== selectedInstanceId() || busy || !can("mods")) return;
       snapshot = result;
       const condition = state.server?.running ? "Server running — stop it to make changes." : "Server stopped.";
       element("emlStatus").textContent = `EML ${result.version}: ${result.installed ? "installed" : "missing"}, ${result.enabled ? "enabled" : "disabled"}. ${condition} ${result.recovery_required ? "Steam validation required." : ""} ${result.last_error || ""}`;
@@ -58,7 +66,7 @@
   }
 
   async function operation(callback) {
-    if (busy) return;
+    if (busy || !can("mods")) { controls(); return; }
     if (!selected || selected !== selectedInstanceId()) { await refreshMods(); toast("Server selection changed. Review the selected server and retry."); return; }
     busy = true;
     controls();

@@ -22,7 +22,7 @@ dependencies are not supported by this integration. Upload limits are 32 MiB,
 
 ## Install and configure
 
-1. Sign in as an ESM-Z administrator and select the server.
+1. Sign in with **Mods** permission and select an assigned or owned server.
 2. Stop that server and open **Server Setup & Config > Mods (EML)**.
 3. Enable EML for the selected server. Use a clean installation without another
    loader or unmanaged mods.
@@ -31,7 +31,7 @@ dependencies are not supported by this integration. Upload limits are 32 MiB,
 5. Review **Configure**, the author's documentation and client requirements,
    then enable the mod and click **Apply & Validate Mods**.
 6. Use **Download EML Log** to save the complete patch log and open it locally.
-   This is also available as `esm-eml.log` under **Logs**.
+   This requires **Logs** permission and is also available as `esm-eml.log` under **Logs**.
 7. Start the server after validation succeeds. Enabled mods are reapplied before
    subsequent starts; a failed patch blocks startup.
 
@@ -42,3 +42,18 @@ build are never restored. Do not change the installation directory while EML is 
 Back up `enshrouded_manager/data/eml` as well as world saves. It contains imported
 mods, edited configurations and original game indexes; ordinary world backups do
 not include it. See [channel switching](BETA_CHANNEL.md) when coming from an older beta.
+
+## Account permissions
+
+From 0.9.6.7a/b, admins can select **mods** under **Account > Users** and in invite
+type permissions. Ordinary users need both Mods permission and a server assignment.
+The permission covers mod status, upload, configuration, enable/disable, removal,
+EML enable/disable for the selected server, and Apply & Validate Mods. Stop the
+selected server before making changes; stopping/starting it requires Control permission.
+
+Admins have every permission. New server-owner accounts and accounts promoted to
+server owner receive Mods by default. The first upgrade also grants Mods to existing
+admins, server owners, owner invite profiles and outstanding owner invite codes.
+This migration runs once, preserving any later explicit owner revocation. Owners
+remain limited to their owned or assigned servers. Global EML tool check/install/
+rollback controls remain administrator-only because they affect every server.

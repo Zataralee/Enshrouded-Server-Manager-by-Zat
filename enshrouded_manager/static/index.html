@@ -58,7 +58,7 @@
       <div class="sub-nav-group hidden" data-subnav="server">
         <button data-tab="setup" data-parent-section="server" data-permission="setup">Setup & Instances</button>
         <button data-tab="settings" data-parent-section="server" data-permission="settings">Server Config</button>
-        <button data-tab="mods" data-parent-section="server" data-admin-only="true">Mods (EML)</button>
+        <button data-tab="mods" data-parent-section="server" data-permission="mods">Mods (EML)</button>
         <button data-tab="accounts" data-parent-section="server" data-permission="accounts">Game Server Accounts</button>
         <button data-tab="saves" data-parent-section="server" data-permission="saves">Saves & Backups</button>
         <button data-tab="webhooks" data-parent-section="server" data-permission="settings">Webhooks</button>
@@ -108,7 +108,7 @@
     <section id="mods" class="tab">
       <div class="panel">
         <h2>Enshrouded Mod Loader (EML)</h2>
-        <div class="panel" id="emlUpdates">
+        <div class="panel" id="emlUpdates" data-admin-only="true">
           <h3>EML Updates</h3>
           <p id="emlUpdateStatus" role="status">Checking installed EML version…</p>
           <div class="actions">
@@ -384,6 +384,7 @@
           </label>
           <label>Steam name <input name="steam_name"></label>
           <label>Steam email <input name="steam_email" type="email"></label>
+          <label class="check"><input name="mods" type="checkbox"> Mods (enabled by default for admins and server owners)</label>
           <button type="submit">Create User</button>
         </form>
       </div>

@@ -4,13 +4,13 @@
 
 The stable release supports Windows hosts. Experimental Linux support is available separately through the `v0.10.0-linux-alpha.7` prerelease and is not production-ready.
 
-Current stable release: **v0.9.6.6a**, including optional EML integration, upstream EML updates and duplicate-manager protection.
+Current stable release: **v0.9.6.7a**, including optional EML integration, upstream EML updates and duplicate-manager protection.
 
-Windows beta: **v0.9.6.6b**. EML no longer requires beta. Existing beta users can use the [channel-switch instructions](docs/BETA_CHANNEL.md) to move to stable with their mods preserved.
+Windows beta: **v0.9.6.7b**. EML no longer requires beta. Existing beta users can use the [channel-switch instructions](docs/BETA_CHANNEL.md) to move to stable with their mods preserved.
 
 Experimental Linux prerelease: **v0.10.0-linux-alpha.7**
 
-Shareable package: [`release/ESM-Z-PythonRequired-v0.9.6.6a.zip`](release/ESM-Z-PythonRequired-v0.9.6.6a.zip)
+Shareable package: [`release/ESM-Z-PythonRequired-v0.9.6.7a.zip`](release/ESM-Z-PythonRequired-v0.9.6.7a.zip)
 
 ![ESM-Z dashboard](docs/screenshots/dashboard.png)
 

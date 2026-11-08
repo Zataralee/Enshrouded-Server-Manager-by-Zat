@@ -49,6 +49,16 @@ Use the server dropdown in the top-right of the page to switch between servers a
 
 You can only see servers that you created or that an admin assigned to your account.
 
+## EML Mods
+
+With **Mods** permission, open `Server Setup & Config` > `Mods (EML)` to manage
+EML patch mods on your assigned or owned servers. An admin can grant or revoke
+this permission under `Account` > `Users`. Admins and new server owners receive
+it by default, and existing admins and owners receive it on their first 0.9.6.7
+upgrade. Later owner permission changes persist. Stop the selected server before
+changing mods; **Control** is a separate permission. **Download EML Log** requires
+**Logs** permission. Global EML tool updates require an administrator.
+
 ## Dashboard
 
 The `Dashboard` tab is used to:

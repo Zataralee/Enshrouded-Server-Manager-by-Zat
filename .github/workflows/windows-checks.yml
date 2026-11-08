@@ -1,0 +1,21 @@
+name: Windows checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare pinned upstream EML fixture
+        run: python enshrouded_manager/build_eml_vendor.py
+      - name: Backend, permissions and updater tests
+        run: python -m unittest discover -s tests -p "test_*.py"
+      - name: UI tests
+        run: node --test tests/test_ui_*.cjs
